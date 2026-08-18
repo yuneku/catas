@@ -75,3 +75,4 @@ arrancar_web.py(.bat)   Servidor local bindeado a Tailscale
 arrancar_publico.bat    Servidor + túnel Cloudflare + panel
 .streamlit/config.toml  Tema oscuro (portátil)
 ```
+# Fuerza redeploy para recargar secrets
