@@ -78,7 +78,8 @@ def _conectar():
         if "sslmode" not in url:
             url = url + ("&" if "?" in url else "?") + "sslmode=require"
         return psycopg2.connect(url)
-    except Exception:
+    except Exception as e:
+        print(f"[db_supabase] ⚠️ Error de conexión a Supabase: {e}")
         return None
 
 
@@ -97,71 +98,81 @@ def _filtrar_nulos(d: dict) -> dict:
 # -----------------------------------------------------------------------------
 
 def cargar_datos() -> dict:
-    """Reconstruye {perfiles, productores, catas} desde Postgres."""
+    """Reconstruye {perfiles, productores, catas} desde Postgres.
+    Ante cualquier error de conexión/lectura, lo registra en los logs y
+    devuelve estructura vacía (la app no crashea; el log dice la causa)."""
     conn = _conectar()
     if conn is None:
+        print("[db_supabase] ⚠️ Sin conexión: devolviendo datos vacíos")
         return {"perfiles": [], "productores": [], "catas": []}
     try:
-        cur = conn.cursor()
-        cur.execute("SELECT id, nombre, password_hash, es_confianza, es_admin "
-                    "FROM perfiles")
-        perfiles = [_filtrar_nulos(dict(zip(
-            ["id", "nombre", "password_hash", "es_confianza", "es_admin"], row)))
-            for row in cur.fetchall()]
-
-        cur.execute("SELECT id, nombre, foto, pais, foto_b64 FROM productores")
-        productores = []
-        for row in cur.fetchall():
-            p = dict(zip(["id", "nombre", "foto", "pais", "foto_b64"], row))
-            if not p.get("foto_b64"):
-                p.pop("foto_b64", None)
-            productores.append(_filtrar_nulos(p))
-
-        cur.execute("SELECT id, fecha, nombre, productor, tipo, comentarios, "
-                    "pais, foto, anio, temporada, foto_b64 FROM catas")
-        catas = []
-        for row in cur.fetchall():
-            c = dict(zip(["id", "fecha", "nombre", "productor", "tipo",
-                          "comentarios", "pais", "foto", "anio", "temporada",
-                          "foto_b64"], row))
-            if not c.get("foto_b64"):
-                c.pop("foto_b64", None)
-            c["votos"] = []
-            c["comentarios_usuarios"] = []
-            catas.append(_filtrar_nulos(c))
-
-        cur.execute("SELECT cata_id, perfil_id, fecha, puntuaciones_detalle, "
-                    "notas_bloques, nota_final FROM votos")
-        por_cata = {c["id"]: c for c in catas}
-        for cata_id, perfil_id, fecha, detalle, notas, final in cur.fetchall():
-            cata = por_cata.get(cata_id)
-            if cata is None:
-                continue
-            voto = {"perfil_id": perfil_id, "fecha": fecha or ""}
-            if isinstance(detalle, dict) and detalle:
-                voto["puntuaciones_detalle"] = detalle
-            if isinstance(notas, dict) and notas:
-                voto["notas_bloques"] = notas
-            voto["nota_final"] = float(final) if final is not None else 0.0
-            cata["votos"].append(voto)
-
-        cur.execute("SELECT cata_id, perfil_id, nombre, fecha, texto "
-                    "FROM comentarios_usuarios ORDER BY id")
-        for cata_id, perfil_id, nombre, fecha, texto in cur.fetchall():
-            cata = por_cata.get(cata_id)
-            if cata is None:
-                continue
-            cata["comentarios_usuarios"].append({
-                "perfil_id": perfil_id, "nombre": nombre or "",
-                "fecha": fecha or "", "texto": texto or ""})
-
-        cur.close()
-        return {"perfiles": perfiles, "productores": productores, "catas": catas}
+        return _leer_desde(conn)
+    except Exception as e:
+        print(f"[db_supabase] ⚠️ Error leyendo datos: {e}")
+        return {"perfiles": [], "productores": [], "catas": []}
     finally:
         try:
             conn.close()
         except Exception:
             pass
+
+
+def _leer_desde(conn) -> dict:
+    cur = conn.cursor()
+    cur.execute("SELECT id, nombre, password_hash, es_confianza, es_admin "
+                "FROM perfiles")
+    perfiles = [_filtrar_nulos(dict(zip(
+        ["id", "nombre", "password_hash", "es_confianza", "es_admin"], row)))
+        for row in cur.fetchall()]
+
+    cur.execute("SELECT id, nombre, foto, pais, foto_b64 FROM productores")
+    productores = []
+    for row in cur.fetchall():
+        p = dict(zip(["id", "nombre", "foto", "pais", "foto_b64"], row))
+        if not p.get("foto_b64"):
+            p.pop("foto_b64", None)
+        productores.append(_filtrar_nulos(p))
+
+    cur.execute("SELECT id, fecha, nombre, productor, tipo, comentarios, "
+                "pais, foto, anio, temporada, foto_b64 FROM catas")
+    catas = []
+    for row in cur.fetchall():
+        c = dict(zip(["id", "fecha", "nombre", "productor", "tipo",
+                      "comentarios", "pais", "foto", "anio", "temporada",
+                      "foto_b64"], row))
+        if not c.get("foto_b64"):
+            c.pop("foto_b64", None)
+        c["votos"] = []
+        c["comentarios_usuarios"] = []
+        catas.append(_filtrar_nulos(c))
+
+    cur.execute("SELECT cata_id, perfil_id, fecha, puntuaciones_detalle, "
+                "notas_bloques, nota_final FROM votos")
+    por_cata = {c["id"]: c for c in catas}
+    for cata_id, perfil_id, fecha, detalle, notas, final in cur.fetchall():
+        cata = por_cata.get(cata_id)
+        if cata is None:
+            continue
+        voto = {"perfil_id": perfil_id, "fecha": fecha or ""}
+        if isinstance(detalle, dict) and detalle:
+            voto["puntuaciones_detalle"] = detalle
+        if isinstance(notas, dict) and notas:
+            voto["notas_bloques"] = notas
+        voto["nota_final"] = float(final) if final is not None else 0.0
+        cata["votos"].append(voto)
+
+    cur.execute("SELECT cata_id, perfil_id, nombre, fecha, texto "
+                "FROM comentarios_usuarios ORDER BY id")
+    for cata_id, perfil_id, nombre, fecha, texto in cur.fetchall():
+        cata = por_cata.get(cata_id)
+        if cata is None:
+            continue
+        cata["comentarios_usuarios"].append({
+            "perfil_id": perfil_id, "nombre": nombre or "",
+            "fecha": fecha or "", "texto": texto or ""})
+
+    cur.close()
+    return {"perfiles": perfiles, "productores": productores, "catas": catas}
 
 
 # -----------------------------------------------------------------------------

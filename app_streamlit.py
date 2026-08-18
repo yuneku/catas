@@ -686,6 +686,12 @@ def sidebar(datos: dict):
         st.markdown("## 🌿 CATAS")
         st.caption("registro & rankings · web")
 
+        # ---- Estado de datos (diagnóstico de conexión) ----
+        if core._db_nube() is not None:
+            st.caption(f"🗄 **Conectado a Supabase** · {len(datos['catas'])} catas")
+        else:
+            st.caption(f"🗄 Modo local (catas.json) · {len(datos['catas'])} catas")
+
         # ---- Sesión (usuario logueado o modo invitado) ----
         st.divider()
         usuario = st.session_state.get("usuario", "")
