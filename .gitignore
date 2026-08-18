@@ -17,7 +17,6 @@ imagenes/
 *_backup_pre_*.py
 
 # Config local / secretos
-.streamlit/secrets.toml
 .env
 *.log
 tunel.log
