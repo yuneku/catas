@@ -496,6 +496,7 @@ def normalizar_coffeeshop(r) -> dict:
     r.setdefault("direccion", "")
     r.setdefault("biografia", "")
     r.setdefault("creado", "")
+    r.setdefault("foto_b64", "")
     r.setdefault("votos", [])
     r.setdefault("productores", [])
     # Limpieza de votos: solo dicts válidos con perfil_id
@@ -602,7 +603,7 @@ def upsert_ciudad(datos: dict, nombre: str, pais_id: str) -> str:
 
 def upsert_coffeeshop(datos: dict, nombre: str, pais_id: str = "",
                       ciudad_id: str = "", direccion: str = "",
-                      biografia: str = "") -> str:
+                      biografia: str = "", foto_b64: str = "") -> str:
     """Crea un coffeeshop (si no existe por nombre) y devuelve su id."""
     nombre = str(nombre).strip()
     if not nombre:
@@ -613,6 +614,8 @@ def upsert_coffeeshop(datos: dict, nombre: str, pais_id: str = "",
             cs["ciudad_id"] = ciudad_id or cs.get("ciudad_id", "")
             cs["direccion"] = direccion or cs.get("direccion", "")
             cs["biografia"] = biografia or cs.get("biografia", "")
+            if foto_b64:
+                cs["foto_b64"] = foto_b64
             return cs["id"]
     cid = generar_id({c.get("id", "") for c in datos["coffeeshops"]},
                      prefijo="cs_")
@@ -621,6 +624,7 @@ def upsert_coffeeshop(datos: dict, nombre: str, pais_id: str = "",
         "ciudad_id": ciudad_id, "direccion": direccion,
         "biografia": biografia,
         "creado": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "foto_b64": foto_b64,
         "votos": [], "productores": []})
     return cid
 

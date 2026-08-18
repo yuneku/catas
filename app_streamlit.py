@@ -2332,8 +2332,8 @@ def _tarjeta_perfil(datos: dict, perfil: dict, admin: bool):
 # ASOCIACIONES / COFFEESHOPS — vistas (directorio geolocalizado)
 # =============================================================================
 
-def tarjeta_coffeeshop(datos: dict, cs: dict) -> str:
-    """Tarjeta del grid: nombre, ubicación, nota media, pills de productores."""
+def tarjeta_coffeeshop(datos: dict, cs: dict, posicion: int = 0) -> str:
+    """Tarjeta del grid: foto, nombre, ubicación, nota media, pills."""
     nota = core.nota_media_coffeeshop(cs)
     n_votos = len(core.votos_coffeeshop_validos(cs))
     ciudad = core.ciudad_por_id(datos, cs.get("ciudad_id", "")).get("nombre", "")
@@ -2352,17 +2352,23 @@ def tarjeta_coffeeshop(datos: dict, cs: dict) -> str:
     nota_html = (f"<span style='font-size:22px;font-weight:800;"
                  f"color:{color_nota}'>{nota:.1f}</span>") if nota else (
         f"<span style='font-size:14px;color:#5A6472'>sin votos</span>")
+    foto_html = (foto_base64("", px=84, radius=10,
+                             b64=cs.get("foto_b64", ""))
+                 or placeholder_imagen(84, "🏪"))
+    medalla = {1: "🥇", 2: "🥈", 3: "🥉"}.get(posicion, "") if posicion else ""
     return (
         f"<div style='background:#161A20;border:1px solid #232A35;"
         f"border-radius:14px;padding:14px;display:flex;flex-direction:column;"
-        f"gap:8px;min-height:190px'>"
+        f"gap:8px;min-height:250px'>"
         f"<div style='display:flex;justify-content:space-between;align-items:start;"
         f"gap:8px'>"
-        f"<div style='font-size:15px;font-weight:800;color:#E8E6E1;line-height:1.25'>"
-        f"{_html.escape(str(cs.get('nombre', '')))}</div>"
+        f"<div style='font-size:17px;font-weight:800;color:#E8E6E1;line-height:1.25'>"
+        f"{medalla} {_html.escape(str(cs.get('nombre', '')))}</div>"
         f"<div style='text-align:right'>{nota_html}<div style='font-size:10px;"
         f"color:#5A6472'>{n_votos} voto{'s' if n_votos != 1 else ''}</div></div>"
         f"</div>"
+        f"<div style='display:flex;justify-content:center;padding:4px 0'>"
+        f"{foto_html}</div>"
         f"<div style='font-size:12px;color:#8A93A0'>📍 {_html.escape(ubicacion)}</div>"
         f"<div style='display:flex;flex-wrap:wrap;margin-top:auto'>{pills}</div>"
         f"</div>")
@@ -2423,14 +2429,20 @@ def _panel_admin_cs_inner(datos: dict):
             cs_direccion = st.text_input("Dirección (opcional)", key="cs_nuevo_dir")
         cs_biografia = st.text_area("Biografía / descripción del local",
                                     key="cs_nuevo_bio", height=90)
+        cs_foto_up = st.file_uploader("📷 Foto del local (opcional)",
+                                      type=["png", "jpg", "jpeg", "webp", "bmp", "gif"],
+                                      key="cs_nuevo_foto")
         if st.button("💾 Crear coffeeshop", type="primary",
                      key="cs_btn_crear", use_container_width=True):
             pid = paises.get(cs_pais, "")
             cid = next((c["id"] for c in datos.get("ciudades", [])
                         if c.get("nombre") == cs_ciudad
                         and c.get("pais_id") == pid), "")
+            foto_b64 = ""
+            if cs_foto_up is not None:
+                _, foto_b64 = guardar_foto_upload(cs_foto_up, "cs_nuevo")
             if core.upsert_coffeeshop(datos, cs_nombre, pid, cid,
-                                      cs_direccion, cs_biografia):
+                                      cs_direccion, cs_biografia, foto_b64):
                 guardar(datos)
                 st.success(f"✅ '{cs_nombre.strip()}' creado.")
                 st.rerun()
@@ -2566,21 +2578,39 @@ def ficha_coffeeshop(datos: dict, cs: dict):
     st.caption(f"📍 {_html.escape(ubicacion)}"
                + (f" · {_html.escape(str(cs.get('direccion', '')))}"
                   if cs.get("direccion") else ""))
-    col_met, col_votos = st.columns([1, 2])
-    with col_met:
-        if nota:
-            color = core.color_nota(nota / 10)
-            st.markdown(f"<div style='font-size:34px;font-weight:800;"
-                        f"color:{color}'>{nota:.1f}</div>",
-                        unsafe_allow_html=True)
-            st.caption(f"⭐ Media de {n_votos} voto{'s' if n_votos != 1 else ''}")
-        else:
-            st.markdown("<div style='font-size:22px;color:#5A6472'>"
-                        "Sin valoraciones todavía</div>", unsafe_allow_html=True)
-    with col_votos:
-        if cs.get("biografia"):
-            st.markdown("**📖 Biografía**")
-            st.write(cs["biografia"])
+    hf1, hf2 = st.columns([1, 2])
+    with hf1:
+        mostrar_foto("", width=160, emoji="🏪",
+                     b64=cs.get("foto_b64", ""))
+        # Cambiar foto (solo admin)
+        if es_admin(datos):
+            up_foto = st.file_uploader("📷 Cambiar foto",
+                                       type=["png", "jpg", "jpeg", "webp", "bmp", "gif"],
+                                       key=f"cs_foto_up_{cs['id']}")
+            if up_foto is not None:
+                if st.button("💾 Guardar foto", key=f"cs_foto_save_{cs['id']}",
+                             use_container_width=True):
+                    _, b64 = guardar_foto_upload(up_foto, cs["id"])
+                    cs["foto_b64"] = b64
+                    guardar(datos)
+                    st.success("✅ Foto actualizada.")
+                    st.rerun()
+    with hf2:
+        col_met, col_bio = st.columns(2)
+        with col_met:
+            if nota:
+                color = core.color_nota(nota / 10)
+                st.markdown(f"<div style='font-size:34px;font-weight:800;"
+                            f"color:{color}'>{nota:.1f}</div>",
+                            unsafe_allow_html=True)
+                st.caption(f"⭐ Media de {n_votos} voto{'s' if n_votos != 1 else ''}")
+            else:
+                st.markdown("<div style='font-size:22px;color:#5A6472'>"
+                            "Sin valoraciones todavía</div>", unsafe_allow_html=True)
+        with col_bio:
+            if cs.get("biografia"):
+                st.markdown("**📖 Biografía**")
+                st.write(cs["biografia"])
 
     # ---- Valoración (solo usuarios logueados) ----
     st.divider()
@@ -2637,7 +2667,14 @@ def ficha_coffeeshop(datos: dict, cs: dict):
     if not productores_menu:
         st.caption("Este local aún no tiene productores vinculados a su menú.")
     for prod in productores_menu:
-        st.markdown(f"**🏭 {_html.escape(str(prod.get('nombre', '')))}**")
+        foto_prod = (foto_base64(core.resolver_ruta_foto(prod.get("foto", "")),
+                                 px=26, radius=13, b64=prod.get("foto_b64", ""))
+                     or placeholder_imagen(26, "🏭", radius=13))
+        st.markdown(f"<div style='display:flex;align-items:center;gap:8px;"
+                    f"margin:6px 0 2px'>{foto_prod}"
+                    f"<span style='font-weight:700;font-size:15px'>"
+                    f"{_html.escape(str(prod.get('nombre', '')))}</span></div>",
+                    unsafe_allow_html=True)
         catas_prod = core.catas_de_productor(datos, prod.get("nombre", ""))
         if not catas_prod:
             st.caption("  *(sin catas registradas en el catálogo)*")
@@ -2718,7 +2755,7 @@ def seccion_asociaciones(datos: dict):
                       if c.get("nombre") == filtro_ciudad
                       and (not pais_id or c.get("pais_id") == pais_id)), "")
 
-    # ---- Listado filtrado ----
+    # ---- Listado filtrado / ranking global ----
     locales = datos.get("coffeeshops", [])
     if pais_id:
         locales = [c for c in locales if c.get("pais_id") == pais_id]
@@ -2727,17 +2764,25 @@ def seccion_asociaciones(datos: dict):
     locales = sorted(locales,
                      key=lambda c: -core.nota_media_coffeeshop(c))
 
+    modo_ranking = (filtro_pais == "Todos" and filtro_ciudad == "Todas")
+
     if not locales:
         st.info("No hay asociaciones con esos criterios todavía.")
     else:
-        st.caption(f"{len(locales)} local{'es' if len(locales) != 1 else ''}")
+        if modo_ranking:
+            st.markdown("### 🏆 Ranking global de asociaciones")
+            st.caption("Todas las asociaciones ordenadas por nota media. "
+                       "Usa los filtros de arriba para buscar por país o ciudad.")
+        else:
+            st.caption(f"{len(locales)} local{'es' if len(locales) != 1 else ''}")
         # Grid responsive: 3 columnas en escritorio, 1 en móvil
         for i in range(0, len(locales), 3):
             fila = locales[i:i + 3]
             cols = st.columns(3)
             for col, cs in zip(cols, fila):
                 with col:
-                    st.markdown(tarjeta_coffeeshop(datos, cs),
+                    pos = i + fila.index(cs) + 1 if modo_ranking else 0
+                    st.markdown(tarjeta_coffeeshop(datos, cs, posicion=pos),
                                 unsafe_allow_html=True)
                     if st.button("👁 Ver Asociación",
                                  key=f"cs_ver_{cs['id']}",

@@ -188,12 +188,14 @@ def _leer_desde(conn) -> dict:
                 for row in cur.fetchall()]
 
     cur.execute("SELECT id, nombre, pais_id, ciudad_id, direccion, biografia, "
-                "creado FROM coffeeshops ORDER BY nombre")
+                "creado, foto_b64 FROM coffeeshops ORDER BY nombre")
     coffeeshops = []
     cs_por_id = {}
     for row in cur.fetchall():
         cs = dict(zip(["id", "nombre", "pais_id", "ciudad_id", "direccion",
-                       "biografia", "creado"], row))
+                       "biografia", "creado", "foto_b64"], row))
+        if not cs.get("foto_b64"):
+            cs.pop("foto_b64", None)
         cs["votos"] = []
         cs["productores"] = []
         coffeeshops.append(_filtrar_nulos(cs))
@@ -336,15 +338,16 @@ def guardar_datos(datos: dict) -> None:
                 continue
             cur.execute(
                 "INSERT INTO coffeeshops (id, nombre, pais_id, ciudad_id, "
-                "direccion, biografia, creado) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+                "direccion, biografia, creado, foto_b64) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre, "
                 "pais_id = EXCLUDED.pais_id, ciudad_id = EXCLUDED.ciudad_id, "
                 "direccion = EXCLUDED.direccion, biografia = EXCLUDED.biografia, "
-                "creado = EXCLUDED.creado",
+                "creado = EXCLUDED.creado, foto_b64 = EXCLUDED.foto_b64",
                 (cs.get("id"), cs.get("nombre", ""), cs.get("pais_id") or None,
                  cs.get("ciudad_id") or None, cs.get("direccion", ""),
-                 cs.get("biografia", ""), cs.get("creado", "")))
+                 cs.get("biografia", ""), cs.get("creado", ""),
+                 cs.get("foto_b64", "")))
 
             for v in cs.get("votos", []):
                 if not isinstance(v, dict) or not v.get("perfil_id"):
