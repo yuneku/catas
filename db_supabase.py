@@ -178,8 +178,47 @@ def _leer_desde(conn) -> dict:
             "perfil_id": perfil_id, "nombre": nombre or "",
             "fecha": fecha or "", "texto": texto or ""})
 
+    # ---- Asociaciones / Coffeeshops ----
+    cur.execute("SELECT id, nombre FROM paises ORDER BY nombre")
+    paises = [_filtrar_nulos(dict(zip(["id", "nombre"], row)))
+              for row in cur.fetchall()]
+
+    cur.execute("SELECT id, nombre, pais_id FROM ciudades ORDER BY nombre")
+    ciudades = [_filtrar_nulos(dict(zip(["id", "nombre", "pais_id"], row)))
+                for row in cur.fetchall()]
+
+    cur.execute("SELECT id, nombre, pais_id, ciudad_id, direccion, biografia, "
+                "creado FROM coffeeshops ORDER BY nombre")
+    coffeeshops = []
+    cs_por_id = {}
+    for row in cur.fetchall():
+        cs = dict(zip(["id", "nombre", "pais_id", "ciudad_id", "direccion",
+                       "biografia", "creado"], row))
+        cs["votos"] = []
+        cs["productores"] = []
+        coffeeshops.append(_filtrar_nulos(cs))
+        cs_por_id[cs["id"]] = cs
+
+    cur.execute("SELECT coffeeshop_id, perfil_id, fecha, nota, comentario "
+                "FROM votos_coffeeshops")
+    for cs_id, perfil_id, fecha, nota, comentario in cur.fetchall():
+        cs = cs_por_id.get(cs_id)
+        if cs is None:
+            continue
+        cs["votos"].append({
+            "perfil_id": perfil_id, "fecha": fecha or "",
+            "nota": float(nota) if nota is not None else 0.0,
+            "comentario": comentario or ""})
+
+    cur.execute("SELECT coffeeshop_id, productor_id FROM coffeeshop_productores")
+    for cs_id, productor_id in cur.fetchall():
+        cs = cs_por_id.get(cs_id)
+        if cs is not None:
+            cs["productores"].append(productor_id)
+
     cur.close()
-    return {"perfiles": perfiles, "productores": productores, "catas": catas}
+    return {"perfiles": perfiles, "productores": productores, "catas": catas,
+            "paises": paises, "ciudades": ciudades, "coffeeshops": coffeeshops}
 
 
 # -----------------------------------------------------------------------------
@@ -195,6 +234,8 @@ def guardar_datos(datos: dict) -> None:
         cur = conn.cursor()
         cur.execute("DELETE FROM votos")
         cur.execute("DELETE FROM comentarios_usuarios")
+        cur.execute("DELETE FROM votos_coffeeshops")
+        cur.execute("DELETE FROM coffeeshop_productores")
 
         for p in datos.get("perfiles", []):
             if not isinstance(p, dict) or not p.get("id"):
@@ -261,6 +302,58 @@ def guardar_datos(datos: dict) -> None:
                     "VALUES (%s, %s, %s, %s, %s)",
                     (c["id"], cm.get("perfil_id"), cm.get("nombre", ""),
                      cm.get("fecha", ""), cm.get("texto", "")))
+
+        # ---- Asociaciones / Coffeeshops ----
+        for p in datos.get("paises", []):
+            if not isinstance(p, dict) or not p.get("id"):
+                continue
+            cur.execute(
+                "INSERT INTO paises (id, nombre) VALUES (%s, %s) "
+                "ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre",
+                (p.get("id"), p.get("nombre", "")))
+
+        for ci in datos.get("ciudades", []):
+            if not isinstance(ci, dict) or not ci.get("id"):
+                continue
+            cur.execute(
+                "INSERT INTO ciudades (id, nombre, pais_id) VALUES (%s, %s, %s) "
+                "ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre, "
+                "pais_id = EXCLUDED.pais_id",
+                (ci.get("id"), ci.get("nombre", ""), ci.get("pais_id", "")))
+
+        for cs in datos.get("coffeeshops", []):
+            if not isinstance(cs, dict) or not cs.get("id"):
+                continue
+            cur.execute(
+                "INSERT INTO coffeeshops (id, nombre, pais_id, ciudad_id, "
+                "direccion, biografia, creado) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+                "ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre, "
+                "pais_id = EXCLUDED.pais_id, ciudad_id = EXCLUDED.ciudad_id, "
+                "direccion = EXCLUDED.direccion, biografia = EXCLUDED.biografia, "
+                "creado = EXCLUDED.creado",
+                (cs.get("id"), cs.get("nombre", ""), cs.get("pais_id", ""),
+                 cs.get("ciudad_id", ""), cs.get("direccion", ""),
+                 cs.get("biografia", ""), cs.get("creado", "")))
+
+            for v in cs.get("votos", []):
+                if not isinstance(v, dict) or not v.get("perfil_id"):
+                    continue
+                cur.execute(
+                    "INSERT INTO votos_coffeeshops "
+                    "(coffeeshop_id, perfil_id, fecha, nota, comentario) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (cs["id"], v.get("perfil_id"), v.get("fecha", ""),
+                     float(v.get("nota", 0.0)), v.get("comentario", "")))
+
+            for pr_id in cs.get("productores", []):
+                if not pr_id:
+                    continue
+                cur.execute(
+                    "INSERT INTO coffeeshop_productores "
+                    "(coffeeshop_id, productor_id) VALUES (%s, %s) "
+                    "ON CONFLICT DO NOTHING",
+                    (cs["id"], pr_id))
 
         conn.commit()
         cur.close()

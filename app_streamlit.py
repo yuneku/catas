@@ -657,12 +657,12 @@ def paginas_para(datos: dict) -> list:
     - Usuario normal: todo menos crear productos (➕ Nueva Cata)."""
     if not st.session_state.get("usuario"):
         return ["📦 Catálogo", "➕ Nueva Cata", "🎯 Por votar", "🏭 Productores",
-                "🏆 Rankings", "📈 Evolución", "👥 Perfiles"]
+                "🏆 Rankings", "📈 Evolución", "🏪 Asociaciones", "👥 Perfiles"]
     if es_admin(datos):
         return ["📦 Catálogo", "➕ Nueva Cata", "🎯 Por votar", "🏭 Productores",
-                "🏆 Rankings", "📈 Evolución", "👥 Perfiles"]
+                "🏆 Rankings", "📈 Evolución", "🏪 Asociaciones", "👥 Perfiles"]
     return ["📦 Catálogo", "🎯 Por votar", "🏭 Productores",
-            "🏆 Rankings", "📈 Evolución", "👥 Perfiles"]
+            "🏆 Rankings", "📈 Evolución", "🏪 Asociaciones", "👥 Perfiles"]
 
 
 def menu_movil(datos: dict):
@@ -2328,6 +2328,307 @@ def _tarjeta_perfil(datos: dict, perfil: dict, admin: bool):
                         st.rerun()
 
 
+# =============================================================================
+# ASOCIACIONES / COFFEESHOPS — vistas (directorio geolocalizado)
+# =============================================================================
+
+def tarjeta_coffeeshop(datos: dict, cs: dict) -> str:
+    """Tarjeta del grid: nombre, ubicación, nota media, pills de productores."""
+    nota = core.nota_media_coffeeshop(cs)
+    n_votos = len(core.votos_coffeeshop_validos(cs))
+    ciudad = core.ciudad_por_id(datos, cs.get("ciudad_id", "")).get("nombre", "")
+    pais = core.pais_por_id(datos, cs.get("pais_id", "")).get("nombre", "")
+    ubicacion = " · ".join(x for x in [ciudad, pais] if x) or "—"
+    prod_nombres = [p.get("nombre", "")
+                    for p in core.productores_de_coffeeshop(datos, cs)]
+    pills = " ".join(
+        f"<span style='background:#1B2230;color:#8AB4F8;padding:2px 8px;"
+        f"border-radius:10px;font-size:11px;font-weight:bold;margin:2px 3px 2px 0'>"
+        f"{_html.escape(str(n))}</span>" for n in prod_nombres[:5])
+    if not pills:
+        pills = ("<span style='color:#5A6472;font-size:11px'>"
+                 "sin productores vinculados</span>")
+    color_nota = core.color_nota(nota / 10) if nota else "#5A6472"
+    nota_html = (f"<span style='font-size:22px;font-weight:800;"
+                 f"color:{color_nota}'>{nota:.1f}</span>") if nota else (
+        f"<span style='font-size:14px;color:#5A6472'>sin votos</span>")
+    return (
+        f"<div style='background:#161A20;border:1px solid #232A35;"
+        f"border-radius:14px;padding:14px;display:flex;flex-direction:column;"
+        f"gap:8px;min-height:190px'>"
+        f"<div style='display:flex;justify-content:space-between;align-items:start;"
+        f"gap:8px'>"
+        f"<div style='font-size:15px;font-weight:800;color:#E8E6E1;line-height:1.25'>"
+        f"{_html.escape(str(cs.get('nombre', '')))}</div>"
+        f"<div style='text-align:right'>{nota_html}<div style='font-size:10px;"
+        f"color:#5A6472'>{n_votos} voto{'s' if n_votos != 1 else ''}</div></div>"
+        f"</div>"
+        f"<div style='font-size:12px;color:#8A93A0'>📍 {_html.escape(ubicacion)}</div>"
+        f"<div style='display:flex;flex-wrap:wrap;margin-top:auto'>{pills}</div>"
+        f"</div>")
+
+
+def panel_admin_coffeeshops(datos: dict):
+    """Herramientas de administración (solo admin 👑): países, ciudades,
+    coffeeshops y vinculación de productores al menú."""
+    if not es_admin(datos):
+        return
+    with st.expander("🛠️ Administración de Asociaciones", expanded=False):
+        # --- Añadir país ---
+        c1, c2 = st.columns(2)
+        with c1:
+            nuevo_pais = st.text_input("➕ Nuevo país", key="cs_pais_nuevo")
+            if st.button("Añadir país", key="cs_btn_pais", use_container_width=True):
+                if core.upsert_pais(datos, nuevo_pais):
+                    guardar(datos)
+                    st.success(f"✅ País '{nuevo_pais.strip()}' añadido.")
+                    st.rerun()
+                else:
+                    st.warning("Escribe el nombre del país.")
+        # --- Añadir ciudad ---
+        with c2:
+            paises = {p["nombre"]: p["id"] for p in datos.get("paises", [])}
+            pais_sel = st.selectbox("País de la ciudad", list(paises) or ["—"],
+                                    key="cs_ciud_pais")
+            nueva_ciudad = st.text_input("➕ Nueva ciudad", key="cs_ciud_nueva")
+            if st.button("Añadir ciudad", key="cs_btn_ciud", use_container_width=True):
+                pid = paises.get(pais_sel, "")
+                if pid and core.upsert_ciudad(datos, nueva_ciudad, pid):
+                    guardar(datos)
+                    st.success(f"✅ Ciudad '{nueva_ciudad.strip()}' añadida.")
+                    st.rerun()
+                else:
+                    st.warning("Elige país y escribe la ciudad.")
+
+        st.divider()
+        # --- Crear coffeeshop ---
+        st.markdown("**🏪 Crear nueva Asociación / Coffeeshop**")
+        a1, a2 = st.columns(2)
+        paises = {p["nombre"]: p["id"] for p in datos.get("paises", [])}
+        with a1:
+            cs_nombre = st.text_input("Nombre del local", key="cs_nuevo_nombre")
+            cs_pais = st.selectbox("País", list(paises) or ["—"], key="cs_nuevo_pais")
+        with a2:
+            ciudades = [c["nombre"] for c in datos.get("ciudades", [])
+                        if c.get("pais_id") == paises.get(cs_pais, "")]
+            cs_ciudad = st.selectbox("Ciudad", ["—"] + ciudades, key="cs_nuevo_ciudad")
+            cs_direccion = st.text_input("Dirección (opcional)", key="cs_nuevo_dir")
+        cs_biografia = st.text_area("Biografía / descripción del local",
+                                    key="cs_nuevo_bio", height=90)
+        if st.button("💾 Crear coffeeshop", type="primary",
+                     key="cs_btn_crear", use_container_width=True):
+            pid = paises.get(cs_pais, "")
+            cid = next((c["id"] for c in datos.get("ciudades", [])
+                        if c.get("nombre") == cs_ciudad
+                        and c.get("pais_id") == pid), "")
+            if core.upsert_coffeeshop(datos, cs_nombre, pid, cid,
+                                      cs_direccion, cs_biografia):
+                guardar(datos)
+                st.success(f"✅ '{cs_nombre.strip()}' creado.")
+                st.rerun()
+            else:
+                st.warning("Escribe el nombre del local.")
+
+        st.divider()
+        # --- Vincular productores al menú ---
+        st.markdown("**🔗 Menú: vincular productores a un local**")
+        cs_nombres = {c["nombre"]: c for c in datos.get("coffeeshops", [])}
+        if not cs_nombres:
+            st.caption("Aún no hay coffeeshops creados.")
+            return
+        v1, v2 = st.columns([1, 2])
+        with v1:
+            sel_cs = st.selectbox("Local", list(cs_nombres), key="cs_vin_local")
+        cs_obj = cs_nombres.get(sel_cs)
+        if cs_obj is not None:
+            prod_opciones = {p["nombre"]: p["id"] for p in datos.get("productores", [])}
+            vinculados = set(cs_obj.get("productores", []))
+            actuales = [n for n, i in prod_opciones.items() if i in vinculados]
+            with v2:
+                elegidos = st.multiselect("Productores en el menú", list(prod_opciones),
+                                          default=actuales, key="cs_vin_prods")
+            if st.button("💾 Guardar menú", key="cs_btn_vin", use_container_width=True):
+                elegidos_ids = {prod_opciones[n] for n in elegidos}
+                for pid in vinculados - elegidos_ids:
+                    core.desvincular_productor_cs(cs_obj, pid)
+                for pid in elegidos_ids - vinculados:
+                    core.vincular_productor_cs(cs_obj, pid)
+                guardar(datos)
+                st.success("✅ Menú actualizado.")
+                st.rerun()
+
+
+def ficha_coffeeshop(datos: dict, cs: dict):
+    """Ficha individual: cabecera, biografía, valoración y menú por productor."""
+    st.button("← Volver al listado", key="cs_volver", use_container_width=True,
+              on_click=lambda: (st.session_state.pop("cs_ficha", None), st.rerun()))
+    ciudad = core.ciudad_por_id(datos, cs.get("ciudad_id", "")).get("nombre", "")
+    pais = core.pais_por_id(datos, cs.get("pais_id", "")).get("nombre", "")
+    ubicacion = " · ".join(x for x in [ciudad, pais] if x) or "—"
+    nota = core.nota_media_coffeeshop(cs)
+    n_votos = len(core.votos_coffeeshop_validos(cs))
+
+    st.markdown(f"## 🏪 {_html.escape(str(cs.get('nombre', '')))}")
+    st.caption(f"📍 {_html.escape(ubicacion)}"
+               + (f" · {_html.escape(str(cs.get('direccion', '')))}"
+                  if cs.get("direccion") else ""))
+    col_met, col_votos = st.columns([1, 2])
+    with col_met:
+        if nota:
+            color = core.color_nota(nota / 10)
+            st.markdown(f"<div style='font-size:34px;font-weight:800;"
+                        f"color:{color}'>{nota:.1f}</div>",
+                        unsafe_allow_html=True)
+            st.caption(f"⭐ Media de {n_votos} voto{'s' if n_votos != 1 else ''}")
+        else:
+            st.markdown("<div style='font-size:22px;color:#5A6472'>"
+                        "Sin valoraciones todavía</div>", unsafe_allow_html=True)
+    with col_votos:
+        if cs.get("biografia"):
+            st.markdown("**📖 Biografía**")
+            st.write(cs["biografia"])
+
+    # ---- Valoración (solo usuarios logueados) ----
+    st.divider()
+    st.markdown("### 🗳 Valoración del local")
+    usuario = st.session_state.get("usuario", "")
+    if not usuario:
+        st.info("🔒 Inicia sesión para valorar este local.")
+        if st.button("🔑 Iniciar sesión", key="cs_login"):
+            st.session_state["pagina"] = "🔐 Acceso"
+            st.rerun()
+    else:
+        perfil = perfil_por_nombre(datos, usuario)
+        if perfil is None:
+            st.warning("Perfil no encontrado.")
+        else:
+            ya_votado = core.voto_coffeeshop_de_perfil(cs, perfil["id"])
+            v1, v2 = st.columns([1, 1])
+            with v1:
+                nota_slider = st.slider("Nota", 0.0, 10.0, 5.0, 0.5,
+                                        key=f"cs_sl_{cs['id']}")
+            with v2:
+                comentario = st.text_input(
+                    "Comentario (opcional)",
+                    value=(ya_votado.get("comentario", "") if ya_votado else ""),
+                    key=f"cs_com_{cs['id']}")
+            if st.button("💾 Guardar mi valoración", type="primary",
+                         key="cs_guardar_voto", use_container_width=True):
+                core.upsert_voto_coffeeshop(cs, perfil["id"], nota_slider, comentario)
+                guardar(datos)
+                st.success("✅ Valoración guardada.")
+                st.rerun()
+            if ya_votado:
+                st.caption(f"Tu voto actual: ⭐ {ya_votado['nota']:.1f}"
+                           + (f" — {ya_votado['comentario']}"
+                              if ya_votado.get("comentario") else ""))
+                if st.button("🗑 Quitar mi voto", key="cs_quitar_voto"):
+                    core.quitar_voto_coffeeshop(cs, perfil["id"])
+                    guardar(datos)
+                    st.rerun()
+            # Lista de valoraciones
+            votos = core.votos_coffeeshop_validos(cs)
+            if votos:
+                st.caption("Valoraciones:")
+                for v in sorted(votos, key=lambda x: -x["nota"]):
+                    nombre_v = next((p["nombre"] for p in datos["perfiles"]
+                                     if p.get("id") == v["perfil_id"]), v["perfil_id"])
+                    extra = f" — {v['comentario']}" if v.get("comentario") else ""
+                    st.caption(f"⭐ {v['nota']:.1f} · {nombre_v}{extra}")
+
+    # ---- Menú / materiales disponibles por productor ----
+    st.divider()
+    st.markdown("### 🧾 Menú / Materiales disponibles")
+    productores_menu = core.productores_de_coffeeshop(datos, cs)
+    if not productores_menu:
+        st.caption("Este local aún no tiene productores vinculados a su menú.")
+    for prod in productores_menu:
+        st.markdown(f"**🏭 {_html.escape(str(prod.get('nombre', '')))}**")
+        catas_prod = core.catas_de_productor(datos, prod.get("nombre", ""))
+        if not catas_prod:
+            st.caption("  *(sin catas registradas en el catálogo)*")
+        for c in catas_prod:
+            n = core.nota_media(c)
+            color = core.color_nota(n / 10) if n else "#5A6472"
+            m1, m2, m3 = st.columns([3, 1, 1])
+            with m1:
+                st.markdown(f"🌿 {_html.escape(str(c.get('nombre', '')))} "
+                            f"· {_html.escape(str(c.get('tipo', '')))}")
+            with m2:
+                if n:
+                    st.markdown(f"<span style='color:{color};font-weight:700'>"
+                                f"{n:.1f}</span>", unsafe_allow_html=True)
+            with m3:
+                if st.button("📂 Ver", key=f"cs_cata_{cs['id']}_{c['id']}"):
+                    st.session_state["ficha_id"] = c["id"]
+                    st.session_state["pagina"] = "📦 Catálogo"
+                    st.session_state.pop("cs_ficha", None)
+                    st.rerun()
+
+
+def seccion_asociaciones(datos: dict):
+    """Directorio geolocalizado: filtros en cascada + grid + ficha."""
+    # Si hay una ficha abierta, mostrarla
+    cs_ficha = st.session_state.get("cs_ficha")
+    if cs_ficha:
+        cs = next((c for c in datos.get("coffeeshops", [])
+                   if c.get("id") == cs_ficha), None)
+        if cs is not None:
+            ficha_coffeeshop(datos, cs)
+            return
+
+    st.markdown("## 🏪 Asociaciones / Coffeeshops")
+    st.caption("Directorio geolocalizado: puntúa los locales y descubre "
+               "qué productores tienen en su menú.")
+
+    # ---- Filtros en cascada (país -> ciudad) ----
+    paises = datos.get("paises", [])
+    ciudades = datos.get("ciudades", [])
+    nombres_paises = [p["nombre"] for p in paises]
+    filtro_pais = st.selectbox("🌍 País", ["Todos"] + nombres_paises,
+                               key="cs_filtro_pais")
+    pais_id = next((p["id"] for p in paises if p["nombre"] == filtro_pais), "")
+    ciudades_filtro = [c for c in ciudades if c.get("pais_id") == pais_id]
+    if filtro_pais == "Todos":
+        opciones_ciudad = ["Todas"] + [c["nombre"] for c in ciudades]
+    else:
+        opciones_ciudad = ["Todas"] + [c["nombre"] for c in ciudades_filtro]
+    filtro_ciudad = st.selectbox("🏙 Ciudad", opciones_ciudad, key="cs_filtro_ciudad")
+    ciudad_id = next((c["id"] for c in ciudades
+                      if c.get("nombre") == filtro_ciudad
+                      and (not pais_id or c.get("pais_id") == pais_id)), "")
+
+    # ---- Listado filtrado ----
+    locales = datos.get("coffeeshops", [])
+    if pais_id:
+        locales = [c for c in locales if c.get("pais_id") == pais_id]
+    if ciudad_id:
+        locales = [c for c in locales if c.get("ciudad_id") == ciudad_id]
+    locales = sorted(locales,
+                     key=lambda c: -core.nota_media_coffeeshop(c))
+
+    if not locales:
+        st.info("No hay asociaciones con esos criterios todavía.")
+    else:
+        st.caption(f"{len(locales)} local{'es' if len(locales) != 1 else ''}")
+        # Grid responsive: 3 columnas en escritorio, 1 en móvil
+        for i in range(0, len(locales), 3):
+            fila = locales[i:i + 3]
+            cols = st.columns(3)
+            for col, cs in zip(cols, fila):
+                with col:
+                    st.markdown(tarjeta_coffeeshop(datos, cs),
+                                unsafe_allow_html=True)
+                    if st.button("👁 Ver Asociación",
+                                 key=f"cs_ver_{cs['id']}",
+                                 use_container_width=True):
+                        st.session_state["cs_ficha"] = cs["id"]
+                        st.rerun()
+
+    # ---- Panel de administración (solo admin 👑) ----
+    panel_admin_coffeeshops(datos)
+
+
 def seccion_perfiles(datos: dict):
     st.markdown("## 👥 Perfiles")
     admin = es_admin(datos)
@@ -2357,7 +2658,8 @@ def seccion_perfiles(datos: dict):
 # =============================================================================
 
 # Secciones visibles sin iniciar sesión (modo invitado, solo lectura)
-PAGINAS_LECTURA = {"📦 Catálogo", "🏭 Productores", "🏆 Rankings", "📈 Evolución"}
+PAGINAS_LECTURA = {"📦 Catálogo", "🏭 Productores", "🏆 Rankings",
+                   "📈 Evolución", "🏪 Asociaciones"}
 
 # Claves de sesión con valor por defecto (se crean UNA vez al arrancar)
 _STATE_DEFAULTS = {
@@ -2431,6 +2733,8 @@ def main():
         seccion_rankings(datos)
     elif pagina == "📈 Evolución":
         seccion_evolucion(datos)
+    elif pagina == "🏪 Asociaciones":
+        seccion_asociaciones(datos)
     else:
         seccion_perfiles(datos)
 

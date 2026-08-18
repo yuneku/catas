@@ -166,8 +166,9 @@ def resolver_ruta_foto(foto: str):
 # =============================================================================
 
 def estructura_vacia() -> dict:
-    """Estructura canónica del JSON (v3: productores como entidad)."""
-    return {"perfiles": [], "productores": [], "catas": []}
+    """Estructura canónica del JSON (v4: paises/ciudades/coffeeshops)."""
+    return {"perfiles": [], "productores": [], "catas": [],
+            "paises": [], "ciudades": [], "coffeeshops": []}
 
 
 def _db_nube():
@@ -185,14 +186,23 @@ def _normalizar_estructura(datos):
         datos = _migrar_v1(datos)
         _asegurar_productores(datos)
         return datos
-    if isinstance(datos, dict):          # formato v2/v3
+    if isinstance(datos, dict):          # formato v2/v3/v4
         datos.setdefault("perfiles", [])
         datos.setdefault("catas", [])
+        datos.setdefault("paises", [])
+        datos.setdefault("ciudades", [])
+        datos.setdefault("coffeeshops", [])
         datos["perfiles"] = [p for p in datos["perfiles"] if isinstance(p, dict)]
         for p in datos["perfiles"]:
             p.setdefault("es_confianza", False)  # rango 'gente de confianza'
         datos["catas"] = [c for c in (normalizar_cata(c) for c in datos["catas"])
                           if c is not None]
+        datos["paises"] = [p for p in datos["paises"] if isinstance(p, dict)]
+        datos["ciudades"] = [c for c in datos["ciudades"] if isinstance(c, dict)]
+        datos["coffeeshops"] = [c for c in
+                                (normalizar_coffeeshop(c)
+                                 for c in datos["coffeeshops"])
+                                if c is not None]
         _asegurar_productores(datos)
         return datos
     return estructura_vacia()
@@ -469,6 +479,195 @@ def quitar_voto(cata: dict, perfil_id: str) -> bool:
         return False
     cata["votos"] = resto
     return True
+
+
+# =============================================================================
+# 2b. ASOCIACIONES / COFFEESHOPS (backend puro)
+# =============================================================================
+
+def normalizar_coffeeshop(r) -> dict:
+    """Normaliza un coffeeshop: campos por defecto, votos y productores."""
+    if not isinstance(r, dict):
+        return None
+    r.setdefault("id", "")
+    r.setdefault("nombre", "Sin nombre")
+    r.setdefault("pais_id", "")
+    r.setdefault("ciudad_id", "")
+    r.setdefault("direccion", "")
+    r.setdefault("biografia", "")
+    r.setdefault("creado", "")
+    r.setdefault("votos", [])
+    r.setdefault("productores", [])
+    # Limpieza de votos: solo dicts válidos con perfil_id
+    r["votos"] = [v for v in r.get("votos", [])
+                  if isinstance(v, dict) and v.get("perfil_id")]
+    r["productores"] = [p for p in r.get("productores", []) if p]
+    return r
+
+
+def votos_coffeeshop_validos(cs: dict) -> list:
+    """Votos válidos (dicts con perfil_id y nota numérica)."""
+    out = []
+    for v in cs.get("votos", []):
+        if isinstance(v, dict) and v.get("perfil_id"):
+            try:
+                nota = float(v.get("nota", 0.0))
+            except (TypeError, ValueError):
+                nota = 0.0
+            v = dict(v)
+            v["nota"] = nota
+            out.append(v)
+    return out
+
+
+def nota_media_coffeeshop(cs: dict) -> float:
+    """Media de los votos del local (0.0 si no hay)."""
+    votos = votos_coffeeshop_validos(cs)
+    if not votos:
+        return 0.0
+    return round(sum(v["nota"] for v in votos) / len(votos), 1)
+
+
+def voto_coffeeshop_de_perfil(cs: dict, perfil_id: str):
+    """Voto de un perfil en el local (None si no votó)."""
+    for v in votos_coffeeshop_validos(cs):
+        if v.get("perfil_id") == perfil_id:
+            return v
+    return None
+
+
+def upsert_voto_coffeeshop(cs: dict, perfil_id: str, nota: float,
+                           comentario: str = "") -> str:
+    """Añade/actualiza la valoración de un perfil al local (nota 0-10)."""
+    try:
+        nota = max(0.0, min(10.0, float(nota)))
+    except (TypeError, ValueError):
+        nota = 0.0
+    voto = {"perfil_id": perfil_id,
+            "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "nota": round(nota, 1), "comentario": comentario or ""}
+    votos = cs.setdefault("votos", [])
+    for i, v in enumerate(votos):
+        if isinstance(v, dict) and v.get("perfil_id") == perfil_id:
+            voto["fecha"] = v.get("fecha") or voto["fecha"]
+            votos[i] = voto
+            return "actualizado"
+    votos.append(voto)
+    return "nuevo"
+
+
+def quitar_voto_coffeeshop(cs: dict, perfil_id: str) -> bool:
+    """Elimina la valoración de un perfil; True si existía."""
+    votos = cs.get("votos", [])
+    resto = [v for v in votos
+             if not (isinstance(v, dict) and v.get("perfil_id") == perfil_id)]
+    if len(resto) == len(votos):
+        return False
+    cs["votos"] = resto
+    return True
+
+
+def upsert_pais(datos: dict, nombre: str) -> str:
+    """Crea un país (si no existe por nombre) y devuelve su id."""
+    nombre = str(nombre).strip()
+    if not nombre:
+        return ""
+    for p in datos.setdefault("paises", []):
+        if str(p.get("nombre", "")).strip().lower() == nombre.lower():
+            return p["id"]
+    pid = generar_id({p.get("id", "") for p in datos["paises"]},
+                     prefijo="pais_")
+    datos["paises"].append({"id": pid, "nombre": nombre})
+    return pid
+
+
+def upsert_ciudad(datos: dict, nombre: str, pais_id: str) -> str:
+    """Crea una ciudad (si no existe por nombre+pais) y devuelve su id."""
+    nombre = str(nombre).strip()
+    if not nombre or not pais_id:
+        return ""
+    for c in datos.setdefault("ciudades", []):
+        if (str(c.get("nombre", "")).strip().lower() == nombre.lower()
+                and c.get("pais_id") == pais_id):
+            return c["id"]
+    cid = generar_id({c.get("id", "") for c in datos["ciudades"]},
+                     prefijo="ciud_")
+    datos["ciudades"].append({"id": cid, "nombre": nombre, "pais_id": pais_id})
+    return cid
+
+
+def upsert_coffeeshop(datos: dict, nombre: str, pais_id: str = "",
+                      ciudad_id: str = "", direccion: str = "",
+                      biografia: str = "") -> str:
+    """Crea un coffeeshop (si no existe por nombre) y devuelve su id."""
+    nombre = str(nombre).strip()
+    if not nombre:
+        return ""
+    for cs in datos.setdefault("coffeeshops", []):
+        if str(cs.get("nombre", "")).strip().lower() == nombre.lower():
+            cs["pais_id"] = pais_id or cs.get("pais_id", "")
+            cs["ciudad_id"] = ciudad_id or cs.get("ciudad_id", "")
+            cs["direccion"] = direccion or cs.get("direccion", "")
+            cs["biografia"] = biografia or cs.get("biografia", "")
+            return cs["id"]
+    cid = generar_id({c.get("id", "") for c in datos["coffeeshops"]},
+                     prefijo="cs_")
+    datos["coffeeshops"].append({
+        "id": cid, "nombre": nombre, "pais_id": pais_id,
+        "ciudad_id": ciudad_id, "direccion": direccion,
+        "biografia": biografia,
+        "creado": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "votos": [], "productores": []})
+    return cid
+
+
+def vincular_productor_cs(cs: dict, productor_id: str) -> bool:
+    """Vincula un productor al menú del local; False si ya estaba."""
+    if not productor_id:
+        return False
+    lista = cs.setdefault("productores", [])
+    if productor_id in lista:
+        return False
+    lista.append(productor_id)
+    return True
+
+
+def desvincular_productor_cs(cs: dict, productor_id: str) -> bool:
+    """Desvincula un productor del local; True si estaba."""
+    lista = cs.get("productores", [])
+    if productor_id not in lista:
+        return False
+    cs["productores"] = [p for p in lista if p != productor_id]
+    return True
+
+
+def productores_de_coffeeshop(datos: dict, cs: dict) -> list:
+    """Entidades productor vinculadas al local (en orden de nombre)."""
+    ids = set(cs.get("productores", []))
+    return sorted([p for p in datos.get("productores", [])
+                   if p.get("id") in ids], key=lambda p: p.get("nombre", ""))
+
+
+def ciudad_por_id(datos: dict, ciudad_id: str) -> dict:
+    for c in datos.get("ciudades", []):
+        if c.get("id") == ciudad_id:
+            return c
+    return {}
+
+
+def pais_por_id(datos: dict, pais_id: str) -> dict:
+    for p in datos.get("paises", []):
+        if p.get("id") == pais_id:
+            return p
+    return {}
+
+
+def catas_de_productor(datos: dict, productor_nombre: str) -> list:
+    """Catas del catálogo de un productor (para el menú del local)."""
+    nombre = str(productor_nombre or "").strip()
+    return sorted([c for c in datos.get("catas", [])
+                   if str(c.get("productor", "")).strip().lower() == nombre.lower()],
+                  key=lambda c: -nota_media(c))
 
 # =============================================================================
 # 3. CAPA DE VISTAS (frontend)
