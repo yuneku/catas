@@ -2380,6 +2380,18 @@ def init_state():
 def main():
     init_state()
     datos = cargar()
+    # Auto-recuperación de caché: si la app está en modo nube pero la caché
+    # sirvió un resultado vacío (p. ej. por un fallo transitorio de conexión
+    # al arrancar) y la BD SÍ tiene datos, se limpia la caché y se reintenta.
+    if core._db_nube() is not None and not datos["catas"]:
+        try:
+            import db_supabase as _db
+            _fresco = _db.cargar_datos()
+            if _fresco.get("catas"):
+                cargar.clear()
+                st.rerun()
+        except Exception:
+            pass
     inyectar_css()  # UI mobile-first (solo vista; no toca la lógica de datos)
     logueado = bool(st.session_state.get("usuario"))
 
