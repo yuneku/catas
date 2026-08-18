@@ -53,13 +53,13 @@ def _secrets_supabase() -> dict:
             return {}
         val = None
         try:
-            val = s["supabase"]
-        except Exception:
+            val = dict(s["supabase"])  # dict() explícito: en Cloud el bloque
+        except Exception:             # es un objeto tipo-dict, no un dict real
             try:
-                val = s.get("supabase")
+                val = dict(s.get("supabase"))
             except Exception:
                 val = None
-        return val if isinstance(val, dict) else {}
+        return val if isinstance(val, dict) and val else {}
     except Exception:
         return {}
 
