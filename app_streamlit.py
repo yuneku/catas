@@ -691,6 +691,19 @@ def sidebar(datos: dict):
             st.caption(f"🗄 **Conectado a Supabase** · {len(datos['catas'])} catas")
         else:
             st.caption(f"🗄 Modo local (catas.json) · {len(datos['catas'])} catas")
+            # Diagnóstico: ¿llegan los secrets del Settings de Streamlit Cloud?
+            try:
+                import streamlit as _st
+                _s = getattr(_st, "secrets", None)
+                if _s is None:
+                    st.caption("🔍 secrets: no disponible")
+                else:
+                    _tiene = "supabase" in _s
+                    st.caption(f"🔍 secrets en runtime: "
+                               f"{'SÍ [supabase]' if _tiene else 'NO — vacío'} "
+                               f"({list(_s.keys()) if not _tiene else ''})")
+            except Exception as _e:
+                st.caption(f"🔍 error leyendo secrets: {_e}")
 
         # ---- Sesión (usuario logueado o modo invitado) ----
         st.divider()
