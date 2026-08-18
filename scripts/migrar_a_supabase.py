@@ -74,20 +74,28 @@ def main():
     with open(json_path, encoding="utf-8") as f:
         datos = json.load(f)
 
-    # 1) Esquema
+    # 1) Esquema (tolerante: si las tablas ya existen, se continúa)
     schema = os.path.join(RUTA, "sql", "schema.sql")
     conn = db_supabase._conectar()
     if conn is None:
-        print("❌ No se pudo conectar (¿psycopg2 instalado? ¿URL/key correctas?)")
+        print("❌ No se pudo conectar (¿psycopg2 instalado? ¿URL correcta?)")
         return 1
     try:
         cur = conn.cursor()
         with open(schema, encoding="utf-8") as f:
-            cur.execute(f.read())
+            for stmt in f.read().split(";"):
+                stmt = stmt.strip()
+                if not stmt:
+                    continue
+                try:
+                    cur.execute(stmt)
+                except Exception as e:
+                    # Ya existe / ownership: se ignora; los datos mandan
+                    print(f"  ⚠️  (esquema) {str(e).strip()[:90]}")
         conn.commit()
         cur.close()
         conn.close()
-        print("✅ Tablas creadas/verificadas")
+        print("✅ Tablas verificadas")
     except Exception as e:
         print(f"❌ Error creando tablas: {e}")
         try:

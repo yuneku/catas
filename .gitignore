@@ -29,3 +29,7 @@ _pre_*.py
 
 # Escritorio local (no necesario en la nube)
 *.bat
+
+# Credenciales locales
+*.env
+.env_db_password
