@@ -1,0 +1,13 @@
+# Configuración de Streamlit para el Sistema de Catas
+# Tema oscuro premium. El servidor local lo lanza arrancar_web.py con flags
+# (bind a Tailscale); en Streamlit Community Cloud la plataforma lo gestiona.
+
+[theme]
+base = "dark"
+primaryColor = "#2E7D32"          # verde (acciones)
+backgroundColor = "#0D0F12"       # fondo profundo
+secondaryBackgroundColor = "#161A20"  # tarjetas
+textColor = "#E8E6E1"             # texto principal
+
+[browser]
+gatherUsageStats = false

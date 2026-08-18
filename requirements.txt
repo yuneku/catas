@@ -1,0 +1,7 @@
+# Sistema de Catas — dependencias
+# Versión mínima: Streamlit 1.37 (st.dialog, mejor soporte móvil)
+streamlit>=1.37
+pandas>=2.0
+Pillow>=10.0
+# Conector Postgres para Supabase (modo nube)
+psycopg2-binary>=2.9

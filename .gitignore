@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Datos locales (los datos de producción viven en Supabase)
+# catas.json contiene hashes de contraseñas: NO subirlo a repos públicos.
+catas.json
+catas.json.bak
+backups/
+imagenes/
+
+# Respaldos de código locales
+*_backup_*.py
+*_backup_pre_*.py
+
+# Config local / secretos
+.streamlit/secrets.toml
+.env
+*.log
+tunel.log
+
+# Capturas / temporales
+captura_*.png
+_qa_*.py
+_pre_*.py
+
+# Escritorio local (no necesario en la nube)
+*.bat
