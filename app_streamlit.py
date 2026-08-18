@@ -42,15 +42,16 @@ import streamlit as st
 # =============================================================================
 # CAPA DE DATOS (intacta) — se importa la lógica y persistencia del original
 # =============================================================================
+# Backend puro (app_datos) sin dependencias de tkinter: funciona en la nube.
 try:
-    import app_catas as core
+    import app_datos as core
 except ImportError as e:
-    st.error(f"No se pudo importar la capa de datos 'app_catas.py': {e}")
+    st.error(f"No se pudo importar la capa de datos 'app_datos.py': {e}")
     st.stop()
 
-# En Streamlit no hay tkinter: el aviso de JSON corrupto se muestra en la UI.
-core.messagebox.showerror = lambda *args, **kwargs: st.error(
-    args[1] if len(args) > 1 else "Error de datos")
+# En Streamlit no hay tkinter: el aviso de datos corruptos se muestra en la UI.
+core._avisar_error = lambda *args, **kwargs: st.error(
+    args[0] if args else "Error de datos")
 
 st.set_page_config(
     page_title="🌿 Sistema de Catas",
