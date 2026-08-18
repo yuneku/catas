@@ -27,6 +27,9 @@
 import os
 import json
 
+# Último error de conexión/lectura (para mostrarlo en la UI de diagnóstico)
+_ULTIMO_ERROR = ""
+
 try:  # st.secrets solo existe dentro de una app Streamlit
     import streamlit as _st
 except Exception:  # pragma: no cover
@@ -80,6 +83,8 @@ def _conectar():
         return psycopg2.connect(url)
     except Exception as e:
         print(f"[db_supabase] ⚠️ Error de conexión a Supabase: {e}")
+        global _ULTIMO_ERROR
+        _ULTIMO_ERROR = f"Error de conexión: {e}"
         return None
 
 
@@ -109,6 +114,8 @@ def cargar_datos() -> dict:
         return _leer_desde(conn)
     except Exception as e:
         print(f"[db_supabase] ⚠️ Error leyendo datos: {e}")
+        global _ULTIMO_ERROR
+        _ULTIMO_ERROR = f"Error leyendo datos: {e}"
         return {"perfiles": [], "productores": [], "catas": []}
     finally:
         try:

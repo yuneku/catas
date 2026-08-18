@@ -694,6 +694,7 @@ def sidebar(datos: dict):
             # Diagnóstico: ¿llegan los secrets del Settings de Streamlit Cloud?
             try:
                 import streamlit as _st
+                import re as _re
                 _s = getattr(_st, "secrets", None)
                 if _s is None:
                     st.caption("🔍 secrets: no disponible")
@@ -702,8 +703,22 @@ def sidebar(datos: dict):
                     st.caption(f"🔍 secrets en runtime: "
                                f"{'SÍ [supabase]' if _tiene else 'NO — vacío'} "
                                f"({list(_s.keys()) if not _tiene else ''})")
+                    if _tiene:
+                        _bloque = dict(_s["supabase"])
+                        _url = str(_bloque.get("url", ""))
+                        _url_masc = _re.sub(r":([^@]+)@", r":***@", _url)
+                        st.caption(f"🔍 claves [supabase]: {list(_bloque.keys())} | "
+                                   f"url: {_url_masc[:90]}")
             except Exception as _e:
                 st.caption(f"🔍 error leyendo secrets: {_e}")
+        if core._db_nube() is not None and len(datos["catas"]) == 0:
+            try:
+                import db_supabase as _db
+                _err = getattr(_db, "_ULTIMO_ERROR", "")
+                if _err:
+                    st.caption(f"⚠️ {str(_err)[:120]}")
+            except Exception:
+                pass
 
         # ---- Sesión (usuario logueado o modo invitado) ----
         st.divider()
