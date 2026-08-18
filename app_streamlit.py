@@ -706,7 +706,8 @@ def sidebar(datos: dict):
                     if _tiene:
                         _bloque = dict(_s["supabase"])
                         _url = str(_bloque.get("url", ""))
-                        _url_masc = _re.sub(r":([^@]+)@", r":***@", _url)
+                        _url_masc = _re.sub(r"://([^:]+):([^@]+)@",
+                                            r"://\1:***@", _url)
                         st.caption(f"🔍 claves [supabase]: {list(_bloque.keys())} | "
                                    f"url: {_url_masc[:90]}")
             except Exception as _e:

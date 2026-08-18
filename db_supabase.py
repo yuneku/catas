@@ -41,24 +41,24 @@ except Exception:  # pragma: no cover
 # -----------------------------------------------------------------------------
 
 def _secrets_supabase() -> dict:
-    """Lee el bloque [supabase] de st.secrets (o {}) sin crashear."""
+    """Lee el bloque [supabase] de st.secrets (o {}) sin crashear.
+    IMPORTANTE: se usa el acceso por índice s['supabase'] (demostrado que
+    funciona en Streamlit Cloud); .get() puede fallar silenciosamente y
+    devolver vacío, dejando la app en modo local."""
     if _st is None:
         return {}
     try:
         s = getattr(_st, "secrets", None)
         if s is None:
             return {}
-        # st.secrets acepta .get() en versiones modernas; fallback con try
-        try:
-            val = s.get("supabase")
-        except Exception:
-            val = None
-        if isinstance(val, dict):
-            return val
+        val = None
         try:
             val = s["supabase"]
         except Exception:
-            return {}
+            try:
+                val = s.get("supabase")
+            except Exception:
+                val = None
         return val if isinstance(val, dict) else {}
     except Exception:
         return {}
