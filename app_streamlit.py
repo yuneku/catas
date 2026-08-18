@@ -2374,7 +2374,15 @@ def panel_admin_coffeeshops(datos: dict):
     if not es_admin(datos):
         return
     with st.expander("🛠️ Administración de Asociaciones", expanded=False):
-        # --- Añadir país ---
+        try:
+            _panel_admin_cs_inner(datos)
+        except Exception as _e:
+            st.error(f"⚠️ Error en el panel admin: {type(_e).__name__}: {_e}")
+            st.exception(_e)
+
+
+def _panel_admin_cs_inner(datos: dict):
+    # --- Añadir país ---
         c1, c2 = st.columns(2)
         with c1:
             nuevo_pais = st.text_input("➕ Nuevo país", key="cs_pais_nuevo")

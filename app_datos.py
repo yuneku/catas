@@ -573,10 +573,12 @@ def upsert_pais(datos: dict, nombre: str) -> str:
     if not nombre:
         return ""
     for p in datos.setdefault("paises", []):
+        if not isinstance(p, dict):  # defensa: datos anómalos en la BD
+            continue
         if str(p.get("nombre", "")).strip().lower() == nombre.lower():
             return p["id"]
-    pid = generar_id({p.get("id", "") for p in datos["paises"]},
-                     prefijo="pais_")
+    pid = generar_id({p.get("id", "") for p in datos["paises"]
+                      if isinstance(p, dict)}, prefijo="pais_")
     datos["paises"].append({"id": pid, "nombre": nombre})
     return pid
 
@@ -587,11 +589,13 @@ def upsert_ciudad(datos: dict, nombre: str, pais_id: str) -> str:
     if not nombre or not pais_id:
         return ""
     for c in datos.setdefault("ciudades", []):
+        if not isinstance(c, dict):  # defensa: datos anómalos
+            continue
         if (str(c.get("nombre", "")).strip().lower() == nombre.lower()
                 and c.get("pais_id") == pais_id):
             return c["id"]
-    cid = generar_id({c.get("id", "") for c in datos["ciudades"]},
-                     prefijo="ciud_")
+    cid = generar_id({c.get("id", "") for c in datos["ciudades"]
+                      if isinstance(c, dict)}, prefijo="ciud_")
     datos["ciudades"].append({"id": cid, "nombre": nombre, "pais_id": pais_id})
     return cid
 
