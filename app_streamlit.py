@@ -715,9 +715,12 @@ def sidebar(datos: dict):
         if core._db_nube() is not None and len(datos["catas"]) == 0:
             try:
                 import db_supabase as _db
+                _fresh = _db.cargar_datos()  # carga DIRECTA, sin la caché de la app
+                st.caption(f"🔍 carga directa (sin caché): "
+                           f"{len(_fresh['catas'])} catas")
                 _err = getattr(_db, "_ULTIMO_ERROR", "")
                 if _err:
-                    st.caption(f"⚠️ {str(_err)[:120]}")
+                    st.caption(f"⚠️ {str(_err)[:130]}")
             except Exception:
                 pass
 
