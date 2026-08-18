@@ -32,3 +32,4 @@ _pre_*.py
 # Credenciales locales
 *.env
 .env_db_password
+.streamlit/secrets.toml
