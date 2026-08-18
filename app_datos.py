@@ -673,6 +673,47 @@ def catas_de_productor(datos: dict, productor_nombre: str) -> list:
                    if str(c.get("productor", "")).strip().lower() == nombre.lower()],
                   key=lambda c: -nota_media(c))
 
+
+def eliminar_pais(datos: dict, pais_id: str) -> int:
+    """Elimina un país y en cascada sus ciudades y coffeeshops.
+    Devuelve cuántos coffeeshops se eliminaron con él."""
+    if not pais_id:
+        return 0
+    datos["paises"] = [p for p in datos.get("paises", [])
+                       if p.get("id") != pais_id]
+    datos["ciudades"] = [c for c in datos.get("ciudades", [])
+                         if c.get("pais_id") != pais_id]
+    cs_ids = {c["id"] for c in datos.get("coffeeshops", [])
+              if c.get("pais_id") == pais_id}
+    datos["coffeeshops"] = [c for c in datos.get("coffeeshops", [])
+                            if c["id"] not in cs_ids]
+    return len(cs_ids)
+
+
+def eliminar_ciudad(datos: dict, ciudad_id: str) -> int:
+    """Elimina una ciudad; los coffeeshops de esa ciudad se quedan sin
+    ciudad asignada (conservan el país). Devuelve nº de afectados."""
+    if not ciudad_id:
+        return 0
+    datos["ciudades"] = [c for c in datos.get("ciudades", [])
+                         if c.get("id") != ciudad_id]
+    afectados = 0
+    for c in datos.get("coffeeshops", []):
+        if c.get("ciudad_id") == ciudad_id:
+            c["ciudad_id"] = ""
+            afectados += 1
+    return afectados
+
+
+def eliminar_coffeeshop(datos: dict, cs_id: str) -> bool:
+    """Elimina un coffeeshop (sus votos y vínculos caen en cascada)."""
+    if not cs_id:
+        return False
+    n = len(datos.get("coffeeshops", []))
+    datos["coffeeshops"] = [c for c in datos.get("coffeeshops", [])
+                            if c.get("id") != cs_id]
+    return len(datos["coffeeshops"]) < n
+
 # =============================================================================
 # 3. CAPA DE VISTAS (frontend)
 # =============================================================================

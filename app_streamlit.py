@@ -2465,6 +2465,92 @@ def _panel_admin_cs_inner(datos: dict):
                 st.success("✅ Menú actualizado.")
                 st.rerun()
 
+        st.divider()
+        # --- Eliminar país / ciudad / asociación ---
+        st.markdown("**🗑 Eliminar (con confirmación)**")
+        d1, d2, d3 = st.columns(3)
+        # País
+        with d1:
+            paises_nombres = {p["nombre"]: p["id"] for p in datos.get("paises", [])}
+            sel_pais_del = st.selectbox("País", list(paises_nombres) or ["—"],
+                                        key="cs_del_pais")
+            if st.button("🗑 Eliminar país", key="cs_btn_del_pais",
+                         use_container_width=True):
+                st.session_state["cs_confirm_pais"] = sel_pais_del
+            if st.session_state.get("cs_confirm_pais"):
+                _nom = st.session_state["cs_confirm_pais"]
+                st.warning(f"Se eliminará **{_nom}** y sus ciudades/asociaciones.")
+                cc1, cc2 = st.columns(2)
+                with cc1:
+                    if st.button("✅ Sí", key="cs_confirm_pais_si",
+                                 use_container_width=True):
+                        pid = paises_nombres.get(
+                            st.session_state.pop("cs_confirm_pais", ""), "")
+                        n_cs = core.eliminar_pais(datos, pid)
+                        guardar(datos)
+                        st.success(f"🗑 País eliminado "
+                                   f"({n_cs} asociaciones en cascada).")
+                        st.rerun()
+                with cc2:
+                    if st.button("❌ No", key="cs_confirm_pais_no",
+                                 use_container_width=True):
+                        st.session_state.pop("cs_confirm_pais", None)
+                        st.rerun()
+        # Ciudad
+        with d2:
+            ciudades_nombres = {f"{c['nombre']} ({core.pais_por_id(datos, c.get('pais_id','')).get('nombre','?')})": c["id"]
+                                for c in datos.get("ciudades", [])}
+            sel_ciud_del = st.selectbox("Ciudad", list(ciudades_nombres) or ["—"],
+                                        key="cs_del_ciudad")
+            if st.button("🗑 Eliminar ciudad", key="cs_btn_del_ciudad",
+                         use_container_width=True):
+                st.session_state["cs_confirm_ciudad"] = sel_ciud_del
+            if st.session_state.get("cs_confirm_ciudad"):
+                _nom = st.session_state["cs_confirm_ciudad"]
+                st.warning(f"Se eliminará la ciudad **{_nom}**.")
+                cc1, cc2 = st.columns(2)
+                with cc1:
+                    if st.button("✅ Sí", key="cs_confirm_ciudad_si",
+                                 use_container_width=True):
+                        cid = ciudades_nombres.get(
+                            st.session_state.pop("cs_confirm_ciudad", ""), "")
+                        core.eliminar_ciudad(datos, cid)
+                        guardar(datos)
+                        st.success("🗑 Ciudad eliminada.")
+                        st.rerun()
+                with cc2:
+                    if st.button("❌ No", key="cs_confirm_ciudad_no",
+                                 use_container_width=True):
+                        st.session_state.pop("cs_confirm_ciudad", None)
+                        st.rerun()
+        # Asociación
+        with d3:
+            cs_nombres_del = {c["nombre"]: c["id"]
+                              for c in datos.get("coffeeshops", [])}
+            sel_cs_del = st.selectbox("Asociación", list(cs_nombres_del) or ["—"],
+                                      key="cs_del_cs")
+            if st.button("🗑 Eliminar asociación", key="cs_btn_del_cs",
+                         use_container_width=True):
+                st.session_state["cs_confirm_cs"] = sel_cs_del
+            if st.session_state.get("cs_confirm_cs"):
+                _nom = st.session_state["cs_confirm_cs"]
+                st.warning(f"Se eliminará **{_nom}** (votos y menú incluidos).")
+                cc1, cc2 = st.columns(2)
+                with cc1:
+                    if st.button("✅ Sí", key="cs_confirm_cs_si",
+                                 use_container_width=True):
+                        cid = cs_nombres_del.get(
+                            st.session_state.pop("cs_confirm_cs", ""), "")
+                        core.eliminar_coffeeshop(datos, cid)
+                        guardar(datos)
+                        st.success("🗑 Asociación eliminada.")
+                        st.rerun()
+                with cc2:
+                    if st.button("❌ No", key="cs_confirm_cs_no",
+                                 use_container_width=True):
+                        st.session_state.pop("cs_confirm_cs", None)
+                        st.rerun()
+
 
 def ficha_coffeeshop(datos: dict, cs: dict):
     """Ficha individual: cabecera, biografía, valoración y menú por productor."""
@@ -2571,6 +2657,32 @@ def ficha_coffeeshop(datos: dict, cs: dict):
                     st.session_state["ficha_id"] = c["id"]
                     st.session_state["pagina"] = "📦 Catálogo"
                     st.session_state.pop("cs_ficha", None)
+                    st.rerun()
+
+    # ---- Eliminar asociación (solo admin 👑, con confirmación) ----
+    if es_admin(datos):
+        st.divider()
+        _confirm_key = f"cs_confirm_ficha_{cs['id']}"
+        if st.button("🗑 Eliminar esta asociación", key=f"cs_del_ficha_{cs['id']}",
+                     use_container_width=True):
+            st.session_state[_confirm_key] = True
+        if st.session_state.get(_confirm_key):
+            st.warning(f"¿Seguro que quieres eliminar **{cs.get('nombre', '')}**? "
+                       "Se borrarán sus valoraciones y su menú.")
+            fc1, fc2 = st.columns(2)
+            with fc1:
+                if st.button("✅ Sí, eliminar", key=f"cs_yes_ficha_{cs['id']}",
+                             use_container_width=True):
+                    core.eliminar_coffeeshop(datos, cs["id"])
+                    guardar(datos)
+                    st.session_state.pop(_confirm_key, None)
+                    st.session_state.pop("cs_ficha", None)
+                    st.success("🗑 Asociación eliminada.")
+                    st.rerun()
+            with fc2:
+                if st.button("❌ Cancelar", key=f"cs_no_ficha_{cs['id']}",
+                             use_container_width=True):
+                    st.session_state.pop(_confirm_key, None)
                     st.rerun()
 
 

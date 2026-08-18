@@ -236,6 +236,15 @@ def guardar_datos(datos: dict) -> None:
         cur.execute("DELETE FROM comentarios_usuarios")
         cur.execute("DELETE FROM votos_coffeeshops")
         cur.execute("DELETE FROM coffeeshop_productores")
+        # Re-sync total de entidades: se borran y reinsertan TODAS, de modo
+        # que las eliminadas del dict también desaparezcan de la BD (el
+        # upsert por sí solo no borra). Orden: hijos ya borrados arriba.
+        cur.execute("DELETE FROM coffeeshops")
+        cur.execute("DELETE FROM ciudades")
+        cur.execute("DELETE FROM paises")
+        cur.execute("DELETE FROM catas")
+        cur.execute("DELETE FROM productores")
+        cur.execute("DELETE FROM perfiles")
 
         for p in datos.get("perfiles", []):
             if not isinstance(p, dict) or not p.get("id"):
@@ -319,7 +328,8 @@ def guardar_datos(datos: dict) -> None:
                 "INSERT INTO ciudades (id, nombre, pais_id) VALUES (%s, %s, %s) "
                 "ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre, "
                 "pais_id = EXCLUDED.pais_id",
-                (ci.get("id"), ci.get("nombre", ""), ci.get("pais_id", "")))
+                (ci.get("id"), ci.get("nombre", ""),
+                 ci.get("pais_id") or None))
 
         for cs in datos.get("coffeeshops", []):
             if not isinstance(cs, dict) or not cs.get("id"):
@@ -332,8 +342,8 @@ def guardar_datos(datos: dict) -> None:
                 "pais_id = EXCLUDED.pais_id, ciudad_id = EXCLUDED.ciudad_id, "
                 "direccion = EXCLUDED.direccion, biografia = EXCLUDED.biografia, "
                 "creado = EXCLUDED.creado",
-                (cs.get("id"), cs.get("nombre", ""), cs.get("pais_id", ""),
-                 cs.get("ciudad_id", ""), cs.get("direccion", ""),
+                (cs.get("id"), cs.get("nombre", ""), cs.get("pais_id") or None,
+                 cs.get("ciudad_id") or None, cs.get("direccion", ""),
                  cs.get("biografia", ""), cs.get("creado", "")))
 
             for v in cs.get("votos", []):
