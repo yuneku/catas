@@ -223,10 +223,15 @@ def _leer_desde(conn) -> dict:
     descartes = [dict(zip(["cata_id", "perfil_id", "fecha"], row))
                  for row in cur.fetchall()]
 
+    # ---- Identidades OAuth (Google) ----
+    cur.execute("SELECT proveedor, sub, email, perfil_id FROM identidades_oauth")
+    identidades = [dict(zip(["proveedor", "sub", "email", "perfil_id"], row))
+                   for row in cur.fetchall()]
+
     cur.close()
     return {"perfiles": perfiles, "productores": productores, "catas": catas,
             "paises": paises, "ciudades": ciudades, "coffeeshops": coffeeshops,
-            "descartes": descartes}
+            "descartes": descartes, "identidades": identidades}
 
 
 # -----------------------------------------------------------------------------
@@ -245,6 +250,7 @@ def guardar_datos(datos: dict) -> None:
         cur.execute("DELETE FROM votos_coffeeshops")
         cur.execute("DELETE FROM coffeeshop_productores")
         cur.execute("DELETE FROM descartes_usuarios")
+        cur.execute("DELETE FROM identidades_oauth")
         # Re-sync total de entidades: se borran y reinsertan TODAS, de modo
         # que las eliminadas del dict también desaparezcan de la BD (el
         # upsert por sí solo no borra). Orden: hijos ya borrados arriba.
@@ -385,6 +391,19 @@ def guardar_datos(datos: dict) -> None:
                 "(cata_id, perfil_id, fecha) VALUES (%s, %s, %s) "
                 "ON CONFLICT (cata_id, perfil_id) DO UPDATE SET fecha = EXCLUDED.fecha",
                 (d.get("cata_id"), d.get("perfil_id"), d.get("fecha", "")))
+
+        # ---- Identidades OAuth (Google) ----
+        for i in datos.get("identidades", []):
+            if not isinstance(i, dict) or not i.get("proveedor") \
+                    or not i.get("sub") or not i.get("perfil_id"):
+                continue
+            cur.execute(
+                "INSERT INTO identidades_oauth "
+                "(proveedor, sub, email, perfil_id) VALUES (%s, %s, %s, %s) "
+                "ON CONFLICT (proveedor, sub) DO UPDATE SET "
+                "email = EXCLUDED.email, perfil_id = EXCLUDED.perfil_id",
+                (i.get("proveedor"), i.get("sub"), i.get("email", ""),
+                 i.get("perfil_id")))
 
         conn.commit()
         cur.close()

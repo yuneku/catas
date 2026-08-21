@@ -69,3 +69,16 @@ create table if not exists public.descartes_usuarios (
 );
 
 create index if not exists idx_descartes_cata on public.descartes_usuarios (cata_id);
+
+-- Identidades OAuth ("Continuar con Google"): vínculo proveedor↔perfil local.
+-- El login tradicional (usuario/contraseña) es complementario, no se sustituye.
+create table if not exists public.identidades_oauth (
+    id        bigint generated always as identity primary key,
+    proveedor text not null,
+    sub       text not null,
+    email     text not null default '',
+    perfil_id text not null references public.perfiles (id) on delete cascade,
+    unique (proveedor, sub)
+);
+
+create index if not exists idx_oauth_perfil on public.identidades_oauth (perfil_id);

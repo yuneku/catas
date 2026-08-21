@@ -5,3 +5,5 @@ pandas>=2.0
 Pillow>=10.0
 # Conector Postgres para Supabase (modo nube)
 psycopg2-binary>=2.9
+# Sesión persistente (cookie "recordar sesión")
+streamlit-cookies-controller>=0.0.4

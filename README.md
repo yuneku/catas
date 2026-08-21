@@ -63,6 +63,15 @@ app lee/escribe en Postgres automáticamente (misma interfaz). Sin ella, usa
   lista de ese usuario). El formulario de voto usa 4 pestañas (👁️👃👅✨) con la
   nota en vivo y el botón de guardar siempre visibles. Migración para la BD
   existente: `sql/por_votar.sql`.
+- **🔐 Sesión y Google OAuth**: "Recordarme en este dispositivo" guarda un token
+  firmado HMAC-SHA256 en cookie (`streamlit-cookies-controller`; 30 días, el
+  login tradicional sigue intacto) y "Continuar con Google" usa OAuth 2.0
+  Authorization Code + PKCE contra Google (la app NO usa Supabase Auth, solo
+  Postgres; los vínculos viven en `identidades_oauth`). Configuración: bloque
+  `[session]` (secreto) y `[google_oauth]` (client_id/secret) en Settings →
+  Secrets de Streamlit, o en `.env_google_oauth` local. Migración BD:
+  `sql/oauth.sql`. Redirect URI a registrar en Google:
+  `https://<tu-app>.streamlit.app/`.
 - **Backups**: en local, `guardar()` hace copia automática en `backups/`
   (rotación 15). En la nube, la base de datos es tu respaldo.
 - **Escritorio**: `app_catas.py` conserva la versión CustomTkinter (3 capas,

@@ -10,14 +10,12 @@ venv/
 catas.json
 catas.json.bak
 backups/
-imagenes/
-
-# Respaldos de código locales
-*_backup_*.py
-*_backup_pre_*.py
 
 # Config local / secretos
+.streamlit/secrets.toml
 .env
+.env_db_password
+.env_google_oauth
 *.log
 tunel.log
 
@@ -28,8 +26,3 @@ _pre_*.py
 
 # Escritorio local (no necesario en la nube)
 *.bat
-
-# Credenciales locales
-*.env
-.env_db_password
-.streamlit/secrets.toml

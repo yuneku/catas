@@ -52,6 +52,9 @@ def _avisar_error(mensaje: str) -> None:
 
 import json
 import os
+import time
+import hmac
+import hashlib
 import shutil
 from datetime import datetime
 
@@ -166,9 +169,10 @@ def resolver_ruta_foto(foto: str):
 # =============================================================================
 
 def estructura_vacia() -> dict:
-    """Estructura canónica del JSON (v5: paises/ciudades/coffeeshops + descartes)."""
+    """Estructura canónica del JSON (v6: + identidades_oauth para Google/OTP)."""
     return {"perfiles": [], "productores": [], "catas": [],
-            "paises": [], "ciudades": [], "coffeeshops": [], "descartes": []}
+            "paises": [], "ciudades": [], "coffeeshops": [], "descartes": [],
+            "identidades": []}
 
 
 def _db_nube():
@@ -193,6 +197,7 @@ def _normalizar_estructura(datos):
         datos.setdefault("ciudades", [])
         datos.setdefault("coffeeshops", [])
         datos.setdefault("descartes", [])
+        datos.setdefault("identidades", [])
         datos["perfiles"] = [p for p in datos["perfiles"] if isinstance(p, dict)]
         for p in datos["perfiles"]:
             p.setdefault("es_confianza", False)  # rango 'gente de confianza'
@@ -210,6 +215,12 @@ def _normalizar_estructura(datos):
                               and d.get("perfil_id")]
         for d in datos["descartes"]:
             d.setdefault("fecha", "")
+        # Identidades OAuth (Google): solo dicts con proveedor+sub+perfil
+        datos["identidades"] = [i for i in datos["identidades"]
+                                if isinstance(i, dict) and i.get("proveedor")
+                                and i.get("sub") and i.get("perfil_id")]
+        for i in datos["identidades"]:
+            i.setdefault("email", "")
         _asegurar_productores(datos)
         return datos
     return estructura_vacia()
@@ -798,6 +809,86 @@ def ids_descartados_por(datos: dict, perfil_id: str) -> set:
         return set()
     return {d.get("cata_id") for d in datos.get("descartes", [])
             if d.get("perfil_id") == perfil_id}
+
+
+# =============================================================================
+# 2d. IDENTIDADES OAuth (Google) — vínculo proveedor↔perfil
+# =============================================================================
+
+def perfil_por_identidad(datos: dict, proveedor: str, sub: str):
+    """Perfil vinculado a una identidad OAuth (proveedor+sub); None si no hay."""
+    if not proveedor or not sub:
+        return None
+    for i in datos.get("identidades", []):
+        if i.get("proveedor") == proveedor and i.get("sub") == sub:
+            return next((p for p in datos.get("perfiles", [])
+                         if p.get("id") == i.get("perfil_id")), None)
+    return None
+
+
+def perfil_por_email(datos: dict, email: str):
+    """Perfil vinculado a un email OAuth (comparación case-insensitive)."""
+    if not email:
+        return None
+    e = str(email).strip().lower()
+    for i in datos.get("identidades", []):
+        if str(i.get("email", "")).strip().lower() == e:
+            return next((p for p in datos.get("perfiles", [])
+                         if p.get("id") == i.get("perfil_id")), None)
+    return None
+
+
+def vincular_identidad(datos: dict, proveedor: str, sub: str, email: str,
+                       perfil_id: str) -> str:
+    """Vincula una identidad OAuth a un perfil. Devuelve 'nuevo' o 'ya'."""
+    if not proveedor or not sub or not perfil_id:
+        return "invalido"
+    identidades = datos.setdefault("identidades", [])
+    for i in identidades:
+        if i.get("proveedor") == proveedor and i.get("sub") == sub:
+            if email and not i.get("email"):
+                i["email"] = email
+            return "ya"
+    identidades.append({"proveedor": proveedor, "sub": sub,
+                        "email": email or "", "perfil_id": perfil_id})
+    return "nuevo"
+
+
+# =============================================================================
+# 2e. TOKENS DE SESIÓN (cookie "recordar sesión") — firma HMAC-SHA256
+# =============================================================================
+
+def crear_token_sesion(perfil_id: str, secreto: str, dias: int = 30) -> str:
+    """Token firmado: <perfil_id>.<expiry_unix>.<hmac_sha256>.
+    Sin secreto o sin perfil devuelve '' (la cookie no se emite)."""
+    if not secreto or not perfil_id:
+        return ""
+    exp = int(time.time()) + dias * 86400
+    payload = f"{perfil_id}.{exp}"
+    firma = hmac.new(secreto.encode("utf-8"), payload.encode("utf-8"),
+                     hashlib.sha256).hexdigest()
+    return f"{payload}.{firma}"
+
+
+def verificar_token_sesion(token: str, secreto: str):
+    """Devuelve el perfil_id si la firma es válida y no ha expirado; None si no."""
+    if not token or not secreto:
+        return None
+    partes = str(token).split(".")
+    if len(partes) != 3:
+        return None
+    perfil_id, exp_txt, firma = partes
+    esperado = hmac.new(secreto.encode("utf-8"),
+                        f"{perfil_id}.{exp_txt}".encode("utf-8"),
+                        hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(esperado, firma):
+        return None
+    try:
+        if int(exp_txt) < time.time():
+            return None
+    except ValueError:
+        return None
+    return perfil_id
 
 # =============================================================================
 # 3. CAPA DE VISTAS (frontend)

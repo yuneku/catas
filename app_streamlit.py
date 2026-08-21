@@ -27,17 +27,28 @@
 """
 
 import os
+import io
+import json
 import shutil
 import hashlib
 import secrets
 import base64
-import io
 import textwrap
+import urllib.parse
+import urllib.request
 import html as _html
 from datetime import datetime
 
 import pandas as pd
 import streamlit as st
+
+# Sesión persistente: cookie "recordar sesión" (JS del navegador; la firma
+# HMAC del token hace que no se pueda forjar sin el secreto del servidor).
+try:
+    from streamlit_cookies_controller import CookieController
+    _COOKIES = CookieController()
+except Exception:  # pragma: no cover
+    _COOKIES = None
 
 # =============================================================================
 # CAPA DE DATOS (intacta) — se importa la lógica y persistencia del original
@@ -266,6 +277,21 @@ footer { visibility: hidden; }
     padding: 0.4rem 0.5rem; border-radius: 12px;
     box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.55);
   }
+}
+
+/* ============ BOTÓN "CONTINUAR CON GOOGLE" (estilo Google, táctil) ============ */
+.st-key-btn_google {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 46px; border-radius: 10px; font-weight: 600; font-size: 15px;
+  background: #FFFFFF; color: #1F1F1F !important; text-decoration: none;
+  border: 1px solid #DADCE0; margin: 0.35rem 0 0.75rem; width: 100%;
+  box-sizing: border-box; transition: background 0.15s;
+}
+.st-key-btn_google:hover { background: #F1F3F4; color: #1F1F1F !important; }
+.g_logo {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 50%; background: #4285F4;
+  color: #FFFFFF; font-weight: 800; font-size: 13px; flex: 0 0 auto;
 }
 
 /* ============ FICHA DE PRODUCTO (2 columnas; colapsa en móvil) ============ */
@@ -757,6 +783,7 @@ def sidebar(datos: dict):
                 "  🤝" if perfil is not None and perfil.get("es_confianza") else "")
             st.markdown(f"**👤 {usuario}**{badge}")
             if st.button("🚪 Cerrar sesión", use_container_width=True):
+                _borrar_cookie()  # olvidar el dispositivo
                 st.session_state.pop("usuario", None)
                 st.session_state["pagina"] = "📦 Catálogo"
                 st.rerun()
@@ -841,6 +868,246 @@ def perfiles_sin_password(datos: dict) -> list:
 
 
 # =============================================================================
+# SESIÓN PERSISTENTE (cookie "recordar sesión") + GOOGLE OAUTH
+# Complementa al login tradicional (usuario/contraseña) SIN sustituirlo:
+#   - Cookie firmada HMAC-SHA256 con el secreto del servidor: un token no se
+#     puede forjar ni reutilizar tras su expiración (30 días).
+#   - Google OAuth 2.0 (Authorization Code + PKCE) contra Google directamente;
+#     la app NO usa Supabase Auth (solo Postgres), por eso el flujo es OAuth puro.
+# =============================================================================
+
+COOKIE_SESION = "terpsx_sesion"
+COOKIE_DIAS = 30
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
+
+
+def _secret_sesion() -> str:
+    """Secreto para firmar cookies: st.secrets['session']['secret'] o env."""
+    try:
+        s = getattr(st, "secrets", None)
+        if s is not None:
+            bloque = dict(s["session"]) if "session" in s else {}
+            if bloque.get("secret"):
+                return str(bloque["secret"]).strip()
+    except Exception:
+        pass
+    return os.environ.get("SESSION_SECRET", "").strip()
+
+
+def _crear_token_sesion(perfil_id: str) -> str:
+    """Token firmado (HMAC-SHA256) para la cookie 'recordar sesión'."""
+    return core.crear_token_sesion(perfil_id, _secret_sesion(), COOKIE_DIAS)
+
+
+def _verificar_token_sesion(token: str):
+    """Devuelve el perfil_id si el token es válido (firma + no expirado)."""
+    return core.verificar_token_sesion(token, _secret_sesion())
+
+
+def _base_url_app() -> str:
+    """URL base pública de la app (para el redirect_uri del OAuth)."""
+    try:
+        cabeceras = st.context.headers
+        host = cabeceras.get("Host") or cabeceras.get("host") or "localhost:8501"
+        proto = (cabeceras.get("X-Forwarded-Proto")
+                 or cabeceras.get("x-forwarded-proto") or "")
+        if not proto:
+            proto = "https" if "streamlit.app" in host else "http"
+        return f"{proto}://{host}"
+    except Exception:
+        return "http://localhost:8501"
+
+
+def _leer_cookie() -> str:
+    """Lee la cookie de sesión (vacío si no hay / librería no disponible)."""
+    if _COOKIES is None:
+        return ""
+    try:
+        valor = _COOKIES.get(COOKIE_SESION)
+        return str(valor) if valor else ""
+    except Exception:
+        return ""
+
+
+def _escribir_cookie(token: str):
+    if _COOKIES is None or not token:
+        return
+    try:
+        _COOKIES.set(COOKIE_SESION, token, max_age=COOKIE_DIAS * 86400,
+                     same_site="Lax", secure=_base_url_app().startswith("https"),
+                     path="/")
+    except Exception:
+        pass
+
+
+def _borrar_cookie():
+    if _COOKIES is None:
+        return
+    try:
+        _COOKIES.remove(COOKIE_SESION)
+    except Exception:
+        try:
+            _COOKIES.set(COOKIE_SESION, "", max_age=0, path="/")
+        except Exception:
+            pass
+
+
+def _auto_login_cookie(datos: dict):
+    """Si hay cookie válida y nadie ha entrado, abre sesión automáticamente."""
+    if st.session_state.get("usuario"):
+        return
+    token = _leer_cookie()
+    perfil_id = _verificar_token_sesion(token)
+    if not perfil_id:
+        if token:  # token corrupto o expirado: limpiar la cookie
+            _borrar_cookie()
+        return
+    perfil = next((p for p in datos.get("perfiles", [])
+                   if p.get("id") == perfil_id), None)
+    if perfil is None:
+        _borrar_cookie()
+        return
+    st.session_state["usuario"] = perfil["nombre"]
+    st.session_state["pagina"] = "📦 Catálogo"
+
+
+# ----------------------------- Google OAuth --------------------------------
+
+def _credenciales_google() -> dict:
+    """Client ID/Secret de Google: st.secrets['google_oauth'] o .env_google_oauth."""
+    try:
+        s = getattr(st, "secrets", None)
+        if s is not None and "google_oauth" in s:
+            bloque = dict(s["google_oauth"])
+            if bloque.get("client_id") and bloque.get("client_secret"):
+                return bloque
+    except Exception:
+        pass
+    try:  # archivo local (mismo patrón que .env_db_password)
+        ruta = os.path.join(core.RUTA_DIR, ".env_google_oauth")
+        with open(ruta, encoding="utf-8") as f:
+            cfg = {}
+            for linea in f:
+                if "=" in linea:
+                    k, v = linea.strip().split("=", 1)
+                    cfg[k.strip()] = v.strip().strip('"').strip("'")
+        if cfg.get("client_id") and cfg.get("client_secret"):
+            return cfg
+    except OSError:
+        pass
+    return {}
+
+
+def _url_autorizacion_google() -> str:
+    """URL de Google con PKCE (S256). El code_verifier vive en session_state."""
+    cfg = _credenciales_google()
+    if not cfg:
+        return ""
+    verifier = secrets.token_urlsafe(64)
+    st.session_state["oauth_verifier"] = verifier
+    st.session_state["oauth_state"] = secrets.token_urlsafe(32)
+    challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(verifier.encode("utf-8")).digest()).rstrip(b"=").decode()
+    params = {
+        "client_id": cfg["client_id"],
+        "redirect_uri": _base_url_app() + "/",
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": st.session_state["oauth_state"],
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+        "prompt": "select_account",
+    }
+    return GOOGLE_AUTH_URL + "?" + urllib.parse.urlencode(params)
+
+
+def _intercambiar_codigo_google(code: str) -> dict:
+    """Cambia el code por tokens y devuelve la info del usuario de Google."""
+    cfg = _credenciales_google()
+    verifier = st.session_state.get("oauth_verifier", "")
+    if not cfg or not verifier:
+        return {}
+    cuerpo = urllib.parse.urlencode({
+        "code": code,
+        "client_id": cfg["client_id"],
+        "client_secret": cfg["client_secret"],
+        "redirect_uri": _base_url_app() + "/",
+        "grant_type": "authorization_code",
+        "code_verifier": verifier,
+    }).encode()
+    req = urllib.request.Request(
+        GOOGLE_TOKEN_URL, data=cuerpo,
+        headers={"Content-Type": "application/x-www-form-urlencoded"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        tokens = json.loads(r.read().decode())
+    access = tokens.get("access_token")
+    if not access:
+        return {}
+    req2 = urllib.request.Request(
+        GOOGLE_USERINFO_URL, headers={"Authorization": f"Bearer {access}"})
+    with urllib.request.urlopen(req2, timeout=30) as r2:
+        return json.loads(r2.read().decode())
+
+
+def _manejar_retorno_oauth(datos: dict):
+    """Captura el ?code= de la URL al volver de Google y abre sesión.
+    También cubre fragmentos (#...) por compatibilidad con otros proveedores."""
+    qp = st.query_params
+    code = qp.get("code", "")
+    estado = qp.get("state", "")
+    if not code:  # también buscar en fragmento de URL (si el proveedor lo usa)
+        return
+    try:
+        qp.clear()  # limpiar SIEMPRE, pase lo que pase
+    except Exception:
+        pass
+    if not estado or estado != st.session_state.get("oauth_state", ""):
+        st.error("⚠️ Error de seguridad al volver de Google (state no coincide). "
+                 "Inténtalo de nuevo.")
+        return
+    try:
+        info = _intercambiar_codigo_google(str(code))
+    except Exception as e:
+        st.error(f"⚠️ No se pudo completar el inicio con Google: {e}")
+        return
+    email = str(info.get("email", "") or "").strip()
+    sub = str(info.get("sub", "") or "").strip()
+    nombre_google = str(info.get("name", "") or "").strip()
+    if not sub:
+        st.error("⚠️ Google no devolvió una identidad válida.")
+        return
+
+    perfil = core.perfil_por_identidad(datos, "google", sub)
+    if perfil is None and email:
+        perfil = core.perfil_por_email(datos, email)
+    creado = False
+    if perfil is None:  # primer inicio con Google: crear perfil automáticamente
+        base = nombre_google or (email.split("@")[0] if email else "google_user")
+        nombre, n = base, 2
+        while perfil_por_nombre(datos, nombre) is not None:
+            nombre = f"{base}{n}"
+            n += 1
+        perfil = {"id": core.generar_id({p["id"] for p in datos["perfiles"]},
+                                        prefijo="p_"),
+                  "nombre": nombre, "password_hash": "", "es_confianza": False,
+                  "es_admin": False}
+        datos["perfiles"].append(perfil)
+        creado = True
+    core.vincular_identidad(datos, "google", sub, email, perfil["id"])
+    guardar(datos)
+    st.session_state["usuario"] = perfil["nombre"]
+    st.session_state["pagina"] = "📦 Catálogo"
+    _escribir_cookie(_crear_token_sesion(perfil["id"]))
+    if creado:
+        st.toast(f"👋 ¡Bienvenido, {perfil['nombre']}! "
+                 "Perfil creado con tu cuenta de Google.")
+    else:
+        st.toast(f"👋 Sesión iniciada con Google — {perfil['nombre']}")
+
+
+# =============================================================================
 # PANTALLA DE LOGIN / REGISTRO
 # =============================================================================
 
@@ -850,10 +1117,12 @@ def pantalla_login(datos: dict):
     st.caption("Inicia sesión con tu perfil para votar. ¿No tienes cuenta? "
                "Crea una abajo (solo nombre y contraseña).")
 
-    # ---- Login ----
+    # ---- Login (con autocompletado nativo del navegador) ----
     with st.form("login"):
-        l_nombre = st.text_input("Nombre de usuario")
-        l_pw = st.text_input("Contraseña", type="password")
+        l_nombre = st.text_input("Nombre de usuario", autocomplete="username")
+        l_pw = st.text_input("Contraseña", type="password",
+                             autocomplete="current-password")
+        l_recordar = st.checkbox("🔒 Recordarme en este dispositivo", value=True)
         entrar = st.form_submit_button("🔓 Entrar", type="primary",
                                        use_container_width=True)
     if entrar:
@@ -864,6 +1133,8 @@ def pantalla_login(datos: dict):
         elif perfil.get("password_hash"):
             if verificar_password(l_pw, perfil["password_hash"]):
                 st.session_state["usuario"] = perfil["nombre"]
+                if l_recordar:
+                    _escribir_cookie(_crear_token_sesion(perfil["id"]))
                 st.rerun()
             else:
                 st.error("Contraseña incorrecta.")
@@ -874,21 +1145,37 @@ def pantalla_login(datos: dict):
                 perfil["password_hash"] = hash_password(l_pw)
                 guardar(datos)
                 st.session_state["usuario"] = perfil["nombre"]
+                if l_recordar:
+                    _escribir_cookie(_crear_token_sesion(perfil["id"]))
                 st.success(f"✅ Contraseña asignada a '{nombre}'. ¡Bienvenido!")
                 st.rerun()
             else:
                 st.warning(f"'{nombre}' todavía no tiene contraseña: escríbela "
                            "aquí para reclamar la cuenta.")
 
+    # ---- Continuar con Google (OAuth; complementa al login tradicional) ----
+    cfg_google = _credenciales_google()
+    if cfg_google:
+        url_google = _url_autorizacion_google()
+        if url_google:
+            st.markdown("**o continúa con**")
+            st.markdown(
+                '<a href="' + _html.escape(url_google) + '" target="_self" '
+                'class="st-key-btn_google" rel="nofollow">'
+                '<span class="g_logo">G</span> Continuar con Google</a>',
+                unsafe_allow_html=True)
+
     st.divider()
 
-    # ---- Registro ----
+    # ---- Registro (autocompletado 'new-password' evita el autofill viejo) ----
     st.markdown("### ✨ ¿Nuevo? Crea tu perfil")
     with st.form("registro"):
-        r_nombre = st.text_input("Nombre de usuario", key="reg_nombre")
+        r_nombre = st.text_input("Nombre de usuario", key="reg_nombre",
+                                 autocomplete="username")
         r_pw = st.text_input("Contraseña (mínimo 4 caracteres)", type="password",
-                             key="reg_pw")
-        r_pw2 = st.text_input("Repite la contraseña", type="password", key="reg_pw2")
+                             key="reg_pw", autocomplete="new-password")
+        r_pw2 = st.text_input("Repite la contraseña", type="password", key="reg_pw2",
+                              autocomplete="new-password")
         crear = st.form_submit_button("➕ Crear cuenta", use_container_width=True)
     if crear:
         nombre = r_nombre.strip()
@@ -901,14 +1188,16 @@ def pantalla_login(datos: dict):
         elif perfil_por_nombre(datos, nombre) is not None:
             st.error("Ya existe un perfil con ese nombre.")
         else:
+            nuevo_id = core.generar_id({p["id"] for p in datos["perfiles"]},
+                                       prefijo="p_")
             datos["perfiles"].append({
-                "id": core.generar_id({p["id"] for p in datos["perfiles"]},
-                                      prefijo="p_"),
+                "id": nuevo_id,
                 "nombre": nombre,
                 "password_hash": hash_password(r_pw),
             })
             guardar(datos)
             st.session_state["usuario"] = nombre
+            _escribir_cookie(_crear_token_sesion(nuevo_id))
             st.rerun()
 
     sin_pw = perfiles_sin_password(datos)
@@ -3031,6 +3320,10 @@ def main():
                 st.rerun()
         except Exception:
             pass
+    # Retorno del proveedor OAuth (?code=... en la URL) → valida y abre sesión
+    _manejar_retorno_oauth(datos)
+    # Sesión persistente: cookie válida → entrar sin formularios
+    _auto_login_cookie(datos)
     inyectar_css()  # UI mobile-first (solo vista; no toca la lógica de datos)
     logueado = bool(st.session_state.get("usuario"))
 
