@@ -304,4 +304,13 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   acento #4ADE80 en h2 ✓, input #171D27 ✓, Plus Jakarta en body/h2/input ✓,
   12 tarjetas + 15 pills renderizados ✓. QA AppTest 10/10 (contenido, no solo
   ausencia de excepciones). Desplegado en c6f3295 (DSv3) + 65a5b47
-  (tipografía encabezados).
+  tipografía encabezados).
+- **CHARTS EN VERDE + FICHA REORDENADA (ago 2026)**: Streamlit NO usa el
+  primaryColor en los charts (usa su paleta default AZUL), lo que rompía el
+  sistema verde de Evolución. Se pasa `color` explícito (bar_chart y line_chart)
+  con `_PALETA_CHART` (verde neón #34D97B + violeta) — verificado objetivamente
+  en producción (`rgb(52,217,123)`). La ficha de presentación se reordenó: el
+  título del producto y la nota grande van ARRIBA (antes la foto enorme
+  enterraba el título); imagen en tarjeta con altura contenida; cajas de
+  Votaciones/Comentarios pulidas (tarjeta con hover, menos "post de foro").
+  QA AppTest 6/6. Desplegado en faea2c2.
