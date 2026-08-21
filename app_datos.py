@@ -63,6 +63,14 @@ from datetime import datetime
 # 1. CONFIGURACIÓN GLOBAL
 # =============================================================================
 
+# Excepción de conflicto multi-usuario (viene de la capa Supabase; en modo
+# local es inerte porque nunca se lanza). La web la captura para recargar.
+try:
+    from db_supabase import ErrorVersionAntigua
+except Exception:
+    class ErrorVersionAntigua(Exception):
+        pass
+
 RUTA_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(RUTA_DIR, "catas.json")
 RUTA_IMAGENES = os.path.join(RUTA_DIR, "imagenes")

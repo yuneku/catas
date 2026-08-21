@@ -82,3 +82,14 @@ create table if not exists public.identidades_oauth (
 );
 
 create index if not exists idx_oauth_perfil on public.identidades_oauth (perfil_id);
+
+-- Guard multi-usuario (ago 2026): versión de la estructura. La lee cada
+-- cargar_datos() y la escribe cada guardar_datos(); si un cliente intenta
+-- guardar con una versión anterior a la de la BD, se rechaza (ErrorVersionAntigua)
+-- en vez de pisar cambios de otro usuario. YA CREADA en la BD (rol catas_app2).
+create table if not exists public.meta_estado (
+    id integer primary key default 1,
+    version bigint not null default 1,
+    updated_at timestamptz not null default now()
+);
+insert into public.meta_estado (id) values (1) on conflict (id) do nothing;

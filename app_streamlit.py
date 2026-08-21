@@ -139,6 +139,14 @@ def guardar(datos: dict) -> bool:
         try:
             core.guardar_datos(datos)
             break
+        except core.ErrorVersionAntigua:
+            # Otro usuario escribió desde que cargamos: NO sobrescribir.
+            # Recargar datos frescos; la persona reintenta su acción.
+            st.toast("🔄 Otro usuario guardó cambios más recientes. "
+                     "Recargando datos actualizados…", icon="🔄")
+            cargar.clear()
+            st.rerun()
+            return False
         except Exception as e:
             intentos += 1
             if intentos >= 2:

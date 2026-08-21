@@ -32,6 +32,16 @@ import threading
 # Último error de conexión/lectura (para mostrarlo en la UI de diagnóstico)
 _ULTIMO_ERROR = ""
 
+
+class ErrorVersionAntigua(Exception):
+    """El cliente intenta guardar sobre datos MÁS VIEJOS que la BD (otro
+    usuario escribió mientras tanto). Evita pisar cambios ajenos en silencio."""
+    def __init__(self, version_bd, version_cliente):
+        super().__init__(f"Datos desactualizados (BD v{version_bd} vs "
+                         f"cliente v{version_cliente})")
+        self.version_bd = version_bd
+        self.version_cliente = version_cliente
+
 # Pool de conexiones persistente: el handshake SSL contra el pooler se paga
 # UNA vez por conexión (ahorro ~0.3-0.5 s por operación frente a abrir y
 # cerrar en cada cargar()/guardar()).
@@ -90,6 +100,10 @@ def _conectar():
         from psycopg2.pool import ThreadedConnectionPool
         if "sslmode" not in url:
             url = url + ("&" if "?" in url else "?") + "sslmode=require"
+        # Acotar el tiempo de handshake: si el pooler no responde, fallar en
+        # ~15 s en vez de colgar el rerun de la app con el timeout TCP por defecto.
+        if "connect_timeout" not in url:
+            url = url + "&connect_timeout=15"
     except Exception as e:
         global _ULTIMO_ERROR
         _ULTIMO_ERROR = f"Error de conexión: {e}"
@@ -287,10 +301,19 @@ def _leer_desde(conn) -> dict:
     identidades = [dict(zip(["proveedor", "sub", "email", "perfil_id"], row))
                    for row in cur.fetchall()]
 
+    # ---- Versión de la estructura (guard multi-usuario) ----
+    try:
+        cur.execute("SELECT version FROM meta_estado WHERE id = 1")
+        _fila = cur.fetchone()
+        version = _fila[0] if _fila else 0
+    except Exception:
+        version = 0  # tabla ausente: sin control de versiones (no romper la carga)
+
     cur.close()
     return {"perfiles": perfiles, "productores": productores, "catas": catas,
             "paises": paises, "ciudades": ciudades, "coffeeshops": coffeeshops,
-            "descartes": descartes, "identidades": identidades}
+            "descartes": descartes, "identidades": identidades,
+            "_version": version}
 
 
 # -----------------------------------------------------------------------------
@@ -313,6 +336,22 @@ def guardar_datos(datos: dict) -> None:
     try:
         from psycopg2.extras import execute_values
         cur = conn.cursor()
+
+        # ---- 0) Guard multi-usuario: si otro usuario escribió desde que este
+        #      cliente cargó los datos, NO sobrescribir en silencio. El
+        #      FOR UPDATE serializa guardados concurrentes (solo uno gana).
+        #      Si la tabla no existe, el guard se degrada a sin-control.
+        try:
+            cur.execute("SELECT version FROM meta_estado WHERE id = 1 FOR UPDATE")
+            _fila = cur.fetchone()
+            _v_bd = _fila[0] if _fila else 0
+            _v_cli = datos.get("_version")
+            if _v_cli is not None and _v_bd != _v_cli:
+                raise ErrorVersionAntigua(_v_bd, _v_cli)
+        except ErrorVersionAntigua:
+            raise
+        except Exception:
+            pass
 
         # ---- 1) Limpieza (un solo round-trip) ----
         cur.execute(
@@ -549,6 +588,13 @@ def guardar_datos(datos: dict) -> None:
                 "email = EXCLUDED.email, perfil_id = EXCLUDED.perfil_id",
                 filas)
 
+        # Bump de versión (multi-usuario): en la MISMA transacción que los
+        # datos; si algo falla, rollback total (sin datos ni bump).
+        try:
+            cur.execute("UPDATE meta_estado SET version = version + 1, "
+                        "updated_at = now() WHERE id = 1")
+        except Exception:
+            pass  # tabla ausente: degradar sin bump
         conn.commit()
         cur.close()
     except Exception:
