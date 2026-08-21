@@ -26,6 +26,7 @@
 
 import os
 import json
+import hashlib
 
 # Último error de conexión/lectura (para mostrarlo en la UI de diagnóstico)
 _ULTIMO_ERROR = ""
@@ -239,171 +240,256 @@ def _leer_desde(conn) -> dict:
 # -----------------------------------------------------------------------------
 
 def guardar_datos(datos: dict) -> None:
-    """Persiste la estructura completa en Postgres (transacción atómica)."""
+    """Persiste la estructura completa en Postgres (transacción atómica).
+    OPTIMIZADO (ago 2026): el re-sync fila a fila (~100 round-trips al pooler,
+    ~5-7 s) se sustituyó por:
+      - DELETE total SOLO de tablas hijo (votos, comentarios, descartes...).
+      - DELETE condicional de entidades: únicamente las que ya NO están en el
+        dict (misma semántica que el re-sync total: lo eliminado desaparece).
+      - UPSERT en BATCH (execute_values: 1 round-trip por tabla).
+      - Fotos b64: se re-suben SOLO si cambiaron (md5 calculado en el servidor;
+        si no cambiaron, el CASE conserva la existente)."""
     conn = _conectar()
     if conn is None:
         raise RuntimeError("Supabase no configurado (url/key) o psycopg2 ausente")
     try:
+        from psycopg2.extras import execute_values
         cur = conn.cursor()
-        cur.execute("DELETE FROM votos")
-        cur.execute("DELETE FROM comentarios_usuarios")
-        cur.execute("DELETE FROM votos_coffeeshops")
-        cur.execute("DELETE FROM coffeeshop_productores")
-        cur.execute("DELETE FROM descartes_usuarios")
-        cur.execute("DELETE FROM identidades_oauth")
-        # Re-sync total de entidades: se borran y reinsertan TODAS, de modo
-        # que las eliminadas del dict también desaparezcan de la BD (el
-        # upsert por sí solo no borra). Orden: hijos ya borrados arriba.
-        cur.execute("DELETE FROM coffeeshops")
-        cur.execute("DELETE FROM ciudades")
-        cur.execute("DELETE FROM paises")
-        cur.execute("DELETE FROM catas")
-        cur.execute("DELETE FROM productores")
-        cur.execute("DELETE FROM perfiles")
 
-        for p in datos.get("perfiles", []):
-            if not isinstance(p, dict) or not p.get("id"):
-                continue
-            cur.execute(
+        # ---- 1) Limpieza (un solo round-trip) ----
+        cur.execute(
+            "DELETE FROM votos; DELETE FROM comentarios_usuarios; "
+            "DELETE FROM votos_coffeeshops; DELETE FROM coffeeshop_productores; "
+            "DELETE FROM descartes_usuarios; DELETE FROM identidades_oauth")
+
+        # Un solo round-trip para los 6 DELETEs condicionales
+        _ids = lambda tabla, clave: [e[clave] for e in datos.get(tabla, [])
+                                     if isinstance(e, dict) and e.get(clave)]
+        _cs = _ids("coffeeshops", "id")
+        _ci = _ids("ciudades", "id")
+        _pa = _ids("paises", "id")
+        _ca = _ids("catas", "id")
+        _pr = _ids("productores", "id")
+        _pe = _ids("perfiles", "id")
+        cur.execute(
+            "DELETE FROM coffeeshops WHERE id <> ALL(%s); "
+            "DELETE FROM ciudades WHERE id <> ALL(%s); "
+            "DELETE FROM paises WHERE id <> ALL(%s); "
+            "DELETE FROM catas WHERE id <> ALL(%s); "
+            "DELETE FROM productores WHERE id <> ALL(%s); "
+            "DELETE FROM perfiles WHERE id <> ALL(%s)",
+            (_cs or [""], _ci or [""], _pa or [""],
+             _ca or [""], _pr or [""], _pe or [""]))
+        # Nota: listas vacías -> [''] -> `<> ALL([''])` borra todo (semántica
+        # de re-sync: sin entidades en el dict, la tabla queda vacía).
+
+        # ---- 2) Hash de fotos existentes (md5 calculado en el servidor: no se
+        #        transfieren los MB, solo los hashes) — 1 solo round-trip ----
+        cur.execute(
+            "SELECT 'catas' AS t, id, md5(foto_b64) FROM catas "
+            "UNION ALL SELECT 'productores', id, md5(foto_b64) FROM productores "
+            "UNION ALL SELECT 'coffeeshops', id, md5(foto_b64) FROM coffeeshops")
+        md5_catas = {}
+        md5_prod = {}
+        md5_cs = {}
+        for t, eid, h in cur.fetchall():
+            (md5_catas if t == "catas" else md5_prod if t == "productores"
+             else md5_cs)[eid] = h
+
+        def _b64_si_cambio(foto_b64: str, md5_previo: str) -> str:
+            """Devuelve la foto SOLO si cambió; '' si es igual (conservar)."""
+            if not foto_b64:
+                return ""
+            if md5_previo == hashlib.md5(foto_b64.encode("utf-8")).hexdigest():
+                return ""
+            return foto_b64
+
+        # ---- 3) Perfiles (batch) ----
+        filas = [(p.get("id"), p.get("nombre", ""), p.get("password_hash", ""),
+                  bool(p.get("es_confianza")), bool(p.get("es_admin")))
+                 for p in datos.get("perfiles", [])
+                 if isinstance(p, dict) and p.get("id")]
+        if filas:
+            execute_values(
+                cur,
                 "INSERT INTO perfiles (id, nombre, password_hash, es_confianza, es_admin) "
-                "VALUES (%s, %s, %s, %s, %s) "
-                "ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre, "
-                "password_hash = EXCLUDED.password_hash, "
-                "es_confianza = EXCLUDED.es_confianza, "
-                "es_admin = EXCLUDED.es_admin",
-                (p.get("id"), p.get("nombre", ""), p.get("password_hash", ""),
-                 bool(p.get("es_confianza")), bool(p.get("es_admin"))))
+                "VALUES %s ON CONFLICT (id) DO UPDATE SET "
+                "nombre = EXCLUDED.nombre, password_hash = EXCLUDED.password_hash, "
+                "es_confianza = EXCLUDED.es_confianza, es_admin = EXCLUDED.es_admin",
+                filas)
 
+        # ---- 4) Productores (batch + fotos solo si cambian) ----
+        filas = []
         for pr in datos.get("productores", []):
             if not isinstance(pr, dict) or not pr.get("id"):
                 continue
-            cur.execute(
+            filas.append((pr["id"], pr.get("nombre", ""), pr.get("foto", ""),
+                          pr.get("pais", ""),
+                          _b64_si_cambio(pr.get("foto_b64", "") or "",
+                                         md5_prod.get(pr["id"], ""))))
+        if filas:
+            execute_values(
+                cur,
                 "INSERT INTO productores (id, nombre, foto, pais, foto_b64) "
-                "VALUES (%s, %s, %s, %s, %s) "
-                "ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre, "
-                "foto = EXCLUDED.foto, pais = EXCLUDED.pais, "
-                "foto_b64 = EXCLUDED.foto_b64",
-                (pr.get("id"), pr.get("nombre", ""), pr.get("foto", ""),
-                 pr.get("pais", ""), pr.get("foto_b64", "")))
+                "VALUES %s ON CONFLICT (id) DO UPDATE SET "
+                "nombre = EXCLUDED.nombre, foto = EXCLUDED.foto, "
+                "pais = EXCLUDED.pais, "
+                "foto_b64 = CASE WHEN EXCLUDED.foto_b64 = '' "
+                "THEN productores.foto_b64 ELSE EXCLUDED.foto_b64 END",
+                filas)
 
+        # ---- 5) Catas + votos + comentarios (batch) ----
+        filas = []
         for c in datos.get("catas", []):
             if not isinstance(c, dict) or not c.get("id"):
                 continue
-            cur.execute(
+            filas.append((c["id"], c.get("fecha", ""), c.get("nombre", ""),
+                          c.get("productor", ""), c.get("tipo", ""),
+                          c.get("comentarios", ""), c.get("pais", ""),
+                          c.get("foto", ""), c.get("anio", ""),
+                          c.get("temporada", ""),
+                          _b64_si_cambio(c.get("foto_b64", "") or "",
+                                         md5_catas.get(c["id"], ""))))
+        if filas:
+            execute_values(
+                cur,
                 "INSERT INTO catas (id, fecha, nombre, productor, tipo, "
                 "comentarios, pais, foto, anio, temporada, foto_b64) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                "ON CONFLICT (id) DO UPDATE SET fecha = EXCLUDED.fecha, "
-                "nombre = EXCLUDED.nombre, productor = EXCLUDED.productor, "
-                "tipo = EXCLUDED.tipo, comentarios = EXCLUDED.comentarios, "
-                "pais = EXCLUDED.pais, foto = EXCLUDED.foto, "
-                "anio = EXCLUDED.anio, temporada = EXCLUDED.temporada, "
-                "foto_b64 = EXCLUDED.foto_b64",
-                (c.get("id"), c.get("fecha", ""), c.get("nombre", ""),
-                 c.get("productor", ""), c.get("tipo", ""),
-                 c.get("comentarios", ""), c.get("pais", ""),
-                 c.get("foto", ""), c.get("anio", ""), c.get("temporada", ""),
-                 c.get("foto_b64", "")))
+                "VALUES %s ON CONFLICT (id) DO UPDATE SET "
+                "fecha = EXCLUDED.fecha, nombre = EXCLUDED.nombre, "
+                "productor = EXCLUDED.productor, tipo = EXCLUDED.tipo, "
+                "comentarios = EXCLUDED.comentarios, pais = EXCLUDED.pais, "
+                "foto = EXCLUDED.foto, anio = EXCLUDED.anio, "
+                "temporada = EXCLUDED.temporada, "
+                "foto_b64 = CASE WHEN EXCLUDED.foto_b64 = '' "
+                "THEN catas.foto_b64 ELSE EXCLUDED.foto_b64 END",
+                filas)
 
+        filas_votos = []
+        filas_coment = []
+        for c in datos.get("catas", []):
+            if not isinstance(c, dict) or not c.get("id"):
+                continue
             for v in c.get("votos", []):
                 if not isinstance(v, dict) or not v.get("perfil_id"):
                     continue
-                cur.execute(
-                    "INSERT INTO votos (cata_id, perfil_id, fecha, "
-                    "puntuaciones_detalle, notas_bloques, nota_final) "
-                    "VALUES (%s, %s, %s, %s, %s, %s)",
+                filas_votos.append(
                     (c["id"], v.get("perfil_id"), v.get("fecha", ""),
                      json.dumps(v.get("puntuaciones_detalle", {}), ensure_ascii=False),
                      json.dumps(v.get("notas_bloques", {}), ensure_ascii=False),
                      float(v.get("nota_final", 0.0))))
-
             for cm in c.get("comentarios_usuarios", []):
                 if not isinstance(cm, dict) or not cm.get("perfil_id"):
                     continue
-                cur.execute(
-                    "INSERT INTO comentarios_usuarios "
-                    "(cata_id, perfil_id, nombre, fecha, texto) "
-                    "VALUES (%s, %s, %s, %s, %s)",
+                filas_coment.append(
                     (c["id"], cm.get("perfil_id"), cm.get("nombre", ""),
                      cm.get("fecha", ""), cm.get("texto", "")))
+        if filas_votos:
+            execute_values(
+                cur,
+                "INSERT INTO votos (cata_id, perfil_id, fecha, "
+                "puntuaciones_detalle, notas_bloques, nota_final) VALUES %s",
+                filas_votos)
+        if filas_coment:
+            execute_values(
+                cur,
+                "INSERT INTO comentarios_usuarios "
+                "(cata_id, perfil_id, nombre, fecha, texto) VALUES %s",
+                filas_coment)
 
-        # ---- Asociaciones / Coffeeshops ----
-        for p in datos.get("paises", []):
-            if not isinstance(p, dict) or not p.get("id"):
-                continue
-            cur.execute(
-                "INSERT INTO paises (id, nombre) VALUES (%s, %s) "
+        # ---- 6) Asociaciones / Coffeeshops (batch) ----
+        filas = [(p.get("id"), p.get("nombre", ""))
+                 for p in datos.get("paises", [])
+                 if isinstance(p, dict) and p.get("id")]
+        if filas:
+            execute_values(
+                cur,
+                "INSERT INTO paises (id, nombre) VALUES %s "
                 "ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre",
-                (p.get("id"), p.get("nombre", "")))
+                filas)
 
-        for ci in datos.get("ciudades", []):
-            if not isinstance(ci, dict) or not ci.get("id"):
-                continue
-            cur.execute(
-                "INSERT INTO ciudades (id, nombre, pais_id) VALUES (%s, %s, %s) "
+        filas = [(c.get("id"), c.get("nombre", ""), c.get("pais_id") or None)
+                 for c in datos.get("ciudades", [])
+                 if isinstance(c, dict) and c.get("id")]
+        if filas:
+            execute_values(
+                cur,
+                "INSERT INTO ciudades (id, nombre, pais_id) VALUES %s "
                 "ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre, "
                 "pais_id = EXCLUDED.pais_id",
-                (ci.get("id"), ci.get("nombre", ""),
-                 ci.get("pais_id") or None))
+                filas)
 
+        filas = []
+        filas_votos_cs = []
+        filas_cs_prod = []
         for cs in datos.get("coffeeshops", []):
             if not isinstance(cs, dict) or not cs.get("id"):
                 continue
-            cur.execute(
-                "INSERT INTO coffeeshops (id, nombre, pais_id, ciudad_id, "
-                "direccion, biografia, creado, foto_b64) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
-                "ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre, "
-                "pais_id = EXCLUDED.pais_id, ciudad_id = EXCLUDED.ciudad_id, "
-                "direccion = EXCLUDED.direccion, biografia = EXCLUDED.biografia, "
-                "creado = EXCLUDED.creado, foto_b64 = EXCLUDED.foto_b64",
-                (cs.get("id"), cs.get("nombre", ""), cs.get("pais_id") or None,
-                 cs.get("ciudad_id") or None, cs.get("direccion", ""),
-                 cs.get("biografia", ""), cs.get("creado", ""),
-                 cs.get("foto_b64", "")))
-
+            filas.append((cs["id"], cs.get("nombre", ""),
+                          cs.get("pais_id") or None, cs.get("ciudad_id") or None,
+                          cs.get("direccion", ""), cs.get("biografia", ""),
+                          cs.get("creado", ""),
+                          _b64_si_cambio(cs.get("foto_b64", "") or "",
+                                         md5_cs.get(cs["id"], ""))))
             for v in cs.get("votos", []):
                 if not isinstance(v, dict) or not v.get("perfil_id"):
                     continue
-                cur.execute(
-                    "INSERT INTO votos_coffeeshops "
-                    "(coffeeshop_id, perfil_id, fecha, nota, comentario) "
-                    "VALUES (%s, %s, %s, %s, %s)",
+                filas_votos_cs.append(
                     (cs["id"], v.get("perfil_id"), v.get("fecha", ""),
                      float(v.get("nota", 0.0)), v.get("comentario", "")))
-
             for pr_id in cs.get("productores", []):
-                if not pr_id:
-                    continue
-                cur.execute(
-                    "INSERT INTO coffeeshop_productores "
-                    "(coffeeshop_id, productor_id) VALUES (%s, %s) "
-                    "ON CONFLICT DO NOTHING",
-                    (cs["id"], pr_id))
+                if pr_id:
+                    filas_cs_prod.append((cs["id"], pr_id))
+        if filas:
+            execute_values(
+                cur,
+                "INSERT INTO coffeeshops (id, nombre, pais_id, ciudad_id, "
+                "direccion, biografia, creado, foto_b64) VALUES %s "
+                "ON CONFLICT (id) DO UPDATE SET nombre = EXCLUDED.nombre, "
+                "pais_id = EXCLUDED.pais_id, ciudad_id = EXCLUDED.ciudad_id, "
+                "direccion = EXCLUDED.direccion, biografia = EXCLUDED.biografia, "
+                "creado = EXCLUDED.creado, "
+                "foto_b64 = CASE WHEN EXCLUDED.foto_b64 = '' "
+                "THEN coffeeshops.foto_b64 ELSE EXCLUDED.foto_b64 END",
+                filas)
+        if filas_votos_cs:
+            execute_values(
+                cur,
+                "INSERT INTO votos_coffeeshops "
+                "(coffeeshop_id, perfil_id, fecha, nota, comentario) VALUES %s",
+                filas_votos_cs)
+        if filas_cs_prod:
+            execute_values(
+                cur,
+                "INSERT INTO coffeeshop_productores "
+                "(coffeeshop_id, productor_id) VALUES %s ON CONFLICT DO NOTHING",
+                filas_cs_prod)
 
-        # ---- Descartes "No lo probé" ----
-        for d in datos.get("descartes", []):
-            if not isinstance(d, dict) or not d.get("cata_id") \
-                    or not d.get("perfil_id"):
-                continue
-            cur.execute(
-                "INSERT INTO descartes_usuarios "
-                "(cata_id, perfil_id, fecha) VALUES (%s, %s, %s) "
-                "ON CONFLICT (cata_id, perfil_id) DO UPDATE SET fecha = EXCLUDED.fecha",
-                (d.get("cata_id"), d.get("perfil_id"), d.get("fecha", "")))
+        # ---- 7) Descartes "No lo probé" (batch) ----
+        filas = [(d.get("cata_id"), d.get("perfil_id"), d.get("fecha", ""))
+                 for d in datos.get("descartes", [])
+                 if isinstance(d, dict) and d.get("cata_id") and d.get("perfil_id")]
+        if filas:
+            execute_values(
+                cur,
+                "INSERT INTO descartes_usuarios (cata_id, perfil_id, fecha) "
+                "VALUES %s ON CONFLICT (cata_id, perfil_id) "
+                "DO UPDATE SET fecha = EXCLUDED.fecha",
+                filas)
 
-        # ---- Identidades OAuth (Google) ----
-        for i in datos.get("identidades", []):
-            if not isinstance(i, dict) or not i.get("proveedor") \
-                    or not i.get("sub") or not i.get("perfil_id"):
-                continue
-            cur.execute(
-                "INSERT INTO identidades_oauth "
-                "(proveedor, sub, email, perfil_id) VALUES (%s, %s, %s, %s) "
-                "ON CONFLICT (proveedor, sub) DO UPDATE SET "
+        # ---- 8) Identidades OAuth (batch) ----
+        filas = [(i.get("proveedor"), i.get("sub"), i.get("email", ""),
+                  i.get("perfil_id"))
+                 for i in datos.get("identidades", [])
+                 if isinstance(i, dict) and i.get("proveedor")
+                 and i.get("sub") and i.get("perfil_id")]
+        if filas:
+            execute_values(
+                cur,
+                "INSERT INTO identidades_oauth (proveedor, sub, email, perfil_id) "
+                "VALUES %s ON CONFLICT (proveedor, sub) DO UPDATE SET "
                 "email = EXCLUDED.email, perfil_id = EXCLUDED.perfil_id",
-                (i.get("proveedor"), i.get("sub"), i.get("email", ""),
-                 i.get("perfil_id")))
+                filas)
 
         conn.commit()
         cur.close()
