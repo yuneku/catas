@@ -3390,6 +3390,18 @@ def main():
     if pagina == "🔐 Acceso":  # caso residual tras iniciar sesión
         pagina = "📦 Catálogo"
 
+    # Scroll al inicio al cambiar de sección/ficha/formulario: evita quedarse
+    # a mitad de página en el móvil. Se inyecta SOLO cuando la vista cambia.
+    clave_vista = (pagina, st.session_state.get("ficha_id"),
+                   st.session_state.get("votar_id"))
+    if st.session_state.get("_vista_prev") != clave_vista:
+        st.session_state["_vista_prev"] = clave_vista
+        st.html(
+            "<script>setTimeout(()=>{"
+            "window.parent.document.querySelector("
+            "'[data-testid=\"stAppViewContainer\"]')?.scrollTo({top:0});"
+            "window.scrollTo({top:0});},0)</script>")
+
     # Al cambiar de sección se cierra la ficha de producto abierta
     if pagina != "📦 Catálogo":
         st.session_state.pop("ficha_id", None)

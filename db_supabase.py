@@ -27,9 +27,16 @@
 import os
 import json
 import hashlib
+import threading
 
 # Último error de conexión/lectura (para mostrarlo en la UI de diagnóstico)
 _ULTIMO_ERROR = ""
+
+# Pool de conexiones persistente: el handshake SSL contra el pooler se paga
+# UNA vez por conexión (ahorro ~0.3-0.5 s por operación frente a abrir y
+# cerrar en cada cargar()/guardar()).
+_POOL = None
+_POOL_LOCK = threading.Lock()
 
 try:  # st.secrets solo existe dentro de una app Streamlit
     import streamlit as _st
@@ -73,20 +80,74 @@ def _config() -> str:
 
 
 def _conectar():
-    """Crea la conexión psycopg2 (import perezoso). None si no es posible."""
+    """Conexión del pool persistente (thread-safe). Reconecta si está rota."""
+    global _POOL
     url = _config()
     if not url:
         return None
     try:
         import psycopg2
+        from psycopg2.pool import ThreadedConnectionPool
         if "sslmode" not in url:
             url = url + ("&" if "?" in url else "?") + "sslmode=require"
-        return psycopg2.connect(url)
     except Exception as e:
-        print(f"[db_supabase] ⚠️ Error de conexión a Supabase: {e}")
         global _ULTIMO_ERROR
         _ULTIMO_ERROR = f"Error de conexión: {e}"
+        print(f"[db_supabase] ⚠️ {e}")
         return None
+
+    def _crear_pool():
+        global _POOL
+        _POOL = ThreadedConnectionPool(1, 4, url)
+
+    with _POOL_LOCK:
+        if _POOL is None:
+            try:
+                _crear_pool()
+            except Exception as e:
+                _ULTIMO_ERROR = f"Error de conexión: {e}"
+                print(f"[db_supabase] ⚠️ Error de conexión a Supabase: {e}")
+                return None
+        try:
+            conn = _POOL.getconn()
+            cur = conn.cursor()
+            cur.execute("SELECT 1")  # validación: detecta conexiones muertas
+            cur.close()
+            return conn
+        except Exception:
+            # Conexión caída (p. ej. timeout del pooler): descartarla y recrear
+            try:
+                _POOL.putconn(conn, close=True)
+            except Exception:
+                pass
+            try:
+                _POOL.closeall()
+            except Exception:
+                pass
+            _POOL = None
+            try:
+                _crear_pool()
+                return _POOL.getconn()
+            except Exception as e:
+                _ULTIMO_ERROR = f"Error de conexión: {e}"
+                print(f"[db_supabase] ⚠️ Error de conexión a Supabase: {e}")
+                return None
+
+
+def _devolver(conn):
+    """Devuelve la conexión al pool (putconn hace rollback implícito)."""
+    if conn is None:
+        return
+    try:
+        if _POOL is not None:
+            _POOL.putconn(conn)
+        else:
+            conn.close()
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 def activo() -> bool:
@@ -119,10 +180,7 @@ def cargar_datos() -> dict:
         _ULTIMO_ERROR = f"Error leyendo datos: {e}"
         return {"perfiles": [], "productores": [], "catas": []}
     finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
+        _devolver(conn)
 
 
 def _leer_desde(conn) -> dict:
@@ -500,7 +558,4 @@ def guardar_datos(datos: dict) -> None:
             pass
         raise
     finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
+        _devolver(conn)
