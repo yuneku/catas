@@ -280,3 +280,13 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   widgets nativos usen fondo oscuro coherente (antes renderizaban con el tema
   claro/default → desentonaban); (c) TTL de cargar() 300->120s (más frescura
   multi-usuario). Desplegado en b5f1f33. QA AppTest 3/3.
+- **ACABADO PROFESIONAL + núcleo (ago 2026)**: Design System v2 global
+  (oscuro + verde neón): fondo con 3 degradados radiales + más profundidad,
+  sidebar con degradado vertical y navegación en filas limpias (hover, opción
+  activa resaltada), tabs con subrayado verde y hover, inputs/textarea con
+  focus ring verde, botones con micro-transición (lift), pills activos con más
+  presencia, expanders y avisos en tarjeta suave, métricas de vidrio. Aplica a
+  TODAS las secciones vía CSS global. Dato clave de Evolución: solo 10/35 catas
+  tienen voto (la nota requiere votos) → la sección parecía vacía; se añadió un
+  chart de ACTIVIDAD (catas registradas por año, TODAS) antes del de notas.
+  Desplegado en 33d8818. QA AppTest 7/7.
