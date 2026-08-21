@@ -113,9 +113,14 @@ def _rotar_backups():
         pass
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def cargar() -> dict:
-    """Lee catas.json UNA vez por sesión (caché). Se invalida en cada guardar()."""
+    """Lee los datos UNA vez (caché 5 min) desde Supabase o catas.json.
+    - TTL 300s: refresca automáticamente los datos escritos por OTROS usuarios
+      sin esperar a que alguien guarde (multi-usuario).
+    - Se invalida al instante en cada guardar() (nunca datos stale tras escribir).
+    - st.cache_data devuelve una COPIA por sesión: mutar el dict no contamina
+      la caché ni a otras sesiones (verificado en laboratorio)."""
     return core.cargar_datos()
 
 
@@ -1384,9 +1389,60 @@ def guardar_voto(datos, perfil, nombre, productor, pais, tipo, anio, temporada,
 DIAS_CADUCIDAD = 30
 
 
+@st.fragment
+def lista_por_votar(datos: dict, perfil: dict, perfil_id: str):
+    """Grid de pendientes como FRAGMENTO: al descartar/deshacer se re-renderiza
+    SOLO esta lista (recarga parcial ultrarrápida, sin SELECT a Supabase ni
+    recarga del resto de la página). El cálculo de pendientes vive DENTRO del
+    fragmento para que la tarjeta descartada desaparezca al instante."""
+    descartados_ids = core.ids_descartados_por(datos, perfil_id)
+    todos_pend = [c for c in datos["catas"]
+                  if core.voto_de_perfil(c, perfil_id) is None]
+    pendientes = [c for c in todos_pend
+                  if c["id"] not in descartados_ids
+                  and core.es_reciente(c, DIAS_CADUCIDAD)]
+    caducados = [c for c in todos_pend
+                 if c["id"] not in descartados_ids
+                 and not core.es_reciente(c, DIAS_CADUCIDAD)]
+    n_descartados = len([c for c in todos_pend if c["id"] in descartados_ids])
+
+    st.caption(f"Votando como **{perfil['nombre']}** — {len(pendientes)} producto"
+               f"{'s' if len(pendientes) != 1 else ''} por votar.")
+    if caducados or n_descartados:
+        partes = []
+        if caducados:
+            partes.append(f"⏳ {len(caducados)} con más de {DIAS_CADUCIDAD} días "
+                          f"(disponibles en el Catálogo)")
+        if n_descartados:
+            partes.append(f"🙈 {n_descartados} descartado"
+                          f"{'s' if n_descartados != 1 else ''}")
+        st.caption("Ocultos: " + " · ".join(partes) + ".")
+
+    if not pendientes:
+        if todos_pend:
+            st.success("🎉 ¡Ya has votado o descartado todo lo reciente! "
+                       "Busca productos antiguos en el 📦 Catálogo.")
+        else:
+            st.success("🎉 ¡Ya has votado todos los productos del catálogo!")
+        return
+
+    # Grid responsive 3-2-1 (misma regla CSS que el Catálogo)
+    with st.container(key="grid_por_votar"):
+        for i in range(0, len(pendientes), 3):
+            fila = pendientes[i:i + 3]
+            cols = st.columns(3)
+            for col, cata in zip(cols, fila):
+                with col:
+                    with st.container(border=True):
+                        tarjeta_por_votar(cata, datos, perfil_id)
+
+
 def tarjeta_por_votar(cata: dict, datos: dict, perfil_id: str):
     """Tarjeta del grid 'Por votar': foto, nombre, productor, chips, días
-    restantes y botones '🗳 Votar' + '🙈 No lo probé' (grid 3-2-1 columnas)."""
+    restantes y botones '🗳 Votar' + '🙈 No lo probé' (grid 3-2-1 columnas).
+    Vive DENTRO del fragmento lista_por_votar: al descartar, el rerun con
+    scope='fragment' recalcula la lista y esta tarjeta desaparece."""
+    nombre_txt = str(cata.get("nombre", "—"))
     media = core.nota_media(cata)
     n_votos = len(core.votos_validos(cata))
     nombre = _html.escape(str(cata.get("nombre", "—")))
@@ -1445,20 +1501,27 @@ def tarjeta_por_votar(cata: dict, datos: dict, perfil_id: str):
         if st.button("🗳 Votar", type="primary",
                      key=f"pv_votar_{cata['id']}", use_container_width=True):
             st.session_state["votar_id"] = cata["id"]
-            st.rerun()
+            st.rerun(scope="app")  # cambio de vista: formulario a ancho completo
     with b_no:
         if st.button("🙈 No lo probé", key=f"pv_no_{cata['id']}",
                      use_container_width=True):
-            core.descartar_cata(datos, cata["id"], perfil_id)
-            guardar(datos)
-            st.toast(f"🙈 '{cata.get('nombre', '')}' marcado como no probado")
-            st.rerun()
+            if core.descartar_cata(datos, cata["id"], perfil_id) == "nuevo":
+                guardar(datos)  # solo persiste si no estaba ya descartada
+            st.toast(f"🙈 '{nombre_txt}' marcado como no probado")
+            try:
+                # Segundo pase del fragmento: recalcula la lista y esta tarjeta
+                # desaparece SIN recargar la app (recarga parcial ultrarrápida).
+                st.rerun(scope="fragment")
+            except Exception:
+                # Solo ocurre en contextos de testing (AppTest) donde el click
+                # no dispara un fragment rerun aislado; en el navegador nunca.
+                pass
 
 
 def formulario_voto(datos: dict, cata: dict, perfil: dict, perfil_id: str):
-    """Formulario de votación a ancho completo: 4 pestañas de sliders
-    (👁️ 👃 👅 ✨), comentarios, nota en vivo y botón de guardar SIEMPRE
-    visibles debajo de las pestañas (sticky en móvil)."""
+    """Formulario de votación a ancho completo dentro de UN st.form:
+    mover los sliders NO recarga la página (envían sus valores solo al
+    pulsar un botón del form); la nota se recalcula al pulsar 'Ver mi nota'."""
     nombre = str(cata.get("nombre", "—"))
     st.markdown(f"### 🗳 Votar **{nombre}**")
     meta_txt = " · ".join(x for x in [
@@ -1469,44 +1532,52 @@ def formulario_voto(datos: dict, cata: dict, perfil: dict, perfil_id: str):
     st.caption("Puntúa cada bloque en su pestaña (1-100).")
 
     prefijo_pv = f"pv_{cata['id']}_"
-    render_sliders_blocks(prefijo=prefijo_pv)  # pestañas, sin expanders
-    coment = st.text_area("Comentarios (opcional)", key=f"pv_coment_{cata['id']}")
+    with st.form(key=f"form_voto_{cata['id']}"):
+        render_sliders_blocks(prefijo=prefijo_pv)  # pestañas, sin expanders
+        coment = st.text_area("Comentarios (opcional)",
+                              key=f"pv_coment_{cata['id']}")
+        # Nota: se calcula con los valores ACTUALES del form (los del último
+        # submit). Mover sliders no dispara recargas: eso es lo que ahorra.
+        scores = obtener_scores_actuales(prefijo_pv)
+        _, nota_final10 = core.calcular_notas(scores)
+        with st.container(key="pv_nota_guardar"):
+            st.metric("💛 Tu nota", f"{nota_final10 * 10:.1f} / 100",
+                      help="Pulsa '👁 Ver mi nota' para recalcularla")
+            c1, c2 = st.columns([2, 1])
+            with c1:
+                ver_nota = st.form_submit_button("👁 Ver mi nota",
+                                                 use_container_width=True)
+            with c2:
+                guardar_voto = st.form_submit_button("💾 Guardar mi voto",
+                                                     type="primary",
+                                                     use_container_width=True)
+            no_probe = st.form_submit_button("🙈 No lo probé",
+                                             use_container_width=True)
 
-    # Nota en vivo + CTA siempre visibles (sticky al fondo en móvil por CSS)
-    _, nota_final10 = core.calcular_notas(obtener_scores_actuales(prefijo_pv))
-    with st.container(key="pv_nota_guardar"):
-        st.metric("💛 Tu nota", f"{nota_final10 * 10:.1f} / 100",
-                  help="En vivo: se actualiza al mover los sliders")
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            if st.button("💾 Guardar mi voto", type="primary",
-                         key=f"pv_guardar_{cata['id']}",
-                         use_container_width=True):
-                scores = obtener_scores_actuales(prefijo_pv)
-                resultado = core.upsert_voto(cata, perfil_id, scores)
-                if coment.strip():
-                    cata["comentarios"] = (cata.get("comentarios", "") +
-                                           "\n\n" + coment.strip()).strip()
-                core.quitar_descarte(datos, cata["id"], perfil_id)
-                guardar(datos)
-                for k in list(st.session_state.keys()):
-                    if k.startswith(prefijo_pv):
-                        del st.session_state[k]
-                st.session_state.pop("votar_id", None)
-                nota = core._flotante(
-                    core.voto_de_perfil(cata, perfil_id).get("nota_final"))
-                st.toast(f"✅ Voto de {perfil['nombre']} "
-                         f"{'ACTUALIZADO' if resultado == 'actualizado' else 'guardado'} — "
-                         f"{nombre} · {nota:.1f}/100")
-                st.rerun()
-        with c2:
-            if st.button("🙈 No lo probé", key=f"pv_no_form_{cata['id']}",
-                         use_container_width=True):
-                core.descartar_cata(datos, cata["id"], perfil_id)
-                guardar(datos)
-                st.session_state.pop("votar_id", None)
-                st.toast(f"🙈 '{nombre}' marcado como no probado")
-                st.rerun()
+    if guardar_voto:
+        scores = obtener_scores_actuales(prefijo_pv)
+        resultado = core.upsert_voto(cata, perfil_id, scores)
+        if coment.strip():
+            cata["comentarios"] = (cata.get("comentarios", "") +
+                                   "\n\n" + coment.strip()).strip()
+        core.quitar_descarte(datos, cata["id"], perfil_id)
+        guardar(datos)
+        for k in list(st.session_state.keys()):
+            if k.startswith(prefijo_pv):
+                del st.session_state[k]
+        st.session_state.pop("votar_id", None)
+        nota = core._flotante(
+            core.voto_de_perfil(cata, perfil_id).get("nota_final"))
+        st.toast(f"✅ Voto de {perfil['nombre']} "
+                 f"{'ACTUALIZADO' if resultado == 'actualizado' else 'guardado'} — "
+                 f"{nombre} · {nota:.1f}/100")
+        st.rerun()
+    if no_probe:
+        core.descartar_cata(datos, cata["id"], perfil_id)
+        guardar(datos)
+        st.session_state.pop("votar_id", None)
+        st.toast(f"🙈 '{nombre}' marcado como no probado")
+        st.rerun()
 
 
 def seccion_por_votar(datos: dict):
@@ -1516,30 +1587,6 @@ def seccion_por_votar(datos: dict):
         st.info("Primero crea o elige tu perfil en el menú lateral (👤 Votando como).")
         return
     perfil_id = perfil["id"]
-
-    # ---- Filtros: sin voto + no descartado + reciente (<= 30 días) ----
-    descartados_ids = core.ids_descartados_por(datos, perfil_id)
-    todos_pend = [c for c in datos["catas"]
-                  if core.voto_de_perfil(c, perfil_id) is None]
-    pendientes = [c for c in todos_pend
-                  if c["id"] not in descartados_ids
-                  and core.es_reciente(c, DIAS_CADUCIDAD)]
-    caducados = [c for c in todos_pend
-                 if c["id"] not in descartados_ids
-                 and not core.es_reciente(c, DIAS_CADUCIDAD)]
-    n_descartados = len([c for c in todos_pend if c["id"] in descartados_ids])
-
-    st.caption(f"Votando como **{perfil['nombre']}** — {len(pendientes)} producto"
-               f"{'s' if len(pendientes) != 1 else ''} por votar.")
-    if caducados or n_descartados:
-        partes = []
-        if caducados:
-            partes.append(f"⏳ {len(caducados)} con más de {DIAS_CADUCIDAD} días "
-                          f"(disponibles en el Catálogo)")
-        if n_descartados:
-            partes.append(f"🙈 {n_descartados} descartado"
-                          f"{'s' if n_descartados != 1 else ''}")
-        st.caption("Ocultos: " + " · ".join(partes) + ".")
 
     # ---- Formulario de votación abierto (a ancho completo, sin grid) ----
     votar_id = st.session_state.get("votar_id")
@@ -1554,23 +1601,8 @@ def seccion_por_votar(datos: dict):
             return
         st.session_state.pop("votar_id", None)  # cata inexistente: limpiar
 
-    if not pendientes:
-        if todos_pend:
-            st.success("🎉 ¡Ya has votado o descartado todo lo reciente! "
-                       "Busca productos antiguos en el 📦 Catálogo.")
-        else:
-            st.success("🎉 ¡Ya has votado todos los productos del catálogo!")
-        return
-
-    # ---- Grid responsive 3-2-1 (misma regla CSS que el Catálogo) ----
-    with st.container(key="grid_por_votar"):
-        for i in range(0, len(pendientes), 3):
-            fila = pendientes[i:i + 3]
-            cols = st.columns(3)
-            for col, cata in zip(cols, fila):
-                with col:
-                    with st.container(border=True):
-                        tarjeta_por_votar(cata, datos, perfil_id)
+    # ---- Grid de pendientes como FRAGMENTO (descarte con recarga parcial) ----
+    lista_por_votar(datos, perfil, perfil_id)
 
 
 # =============================================================================
@@ -1723,9 +1755,11 @@ def seccion_catalogo(datos: dict):
                         tarjeta_catalogo(cata, datos, admin)
 
 
+@st.fragment
 def seccion_comentarios(datos: dict, cata: dict):
     """Comentarios de usuarios (visibles para todos; publican la gente de
-    confianza y los admins). Se usa en la ficha premium y en la de edición."""
+    confianza y los admins). Se usa en la ficha premium y en la de edición.
+    FRAGMENTO: publicar un comentario solo re-renderiza este bloque."""
     perfil = perfil_activo(datos)
     st.divider()
     st.markdown("### 💬 Comentarios")
@@ -1741,6 +1775,12 @@ def seccion_comentarios(datos: dict, cata: dict):
             st.markdown(f"**💬 {autor}** · {fecha}")
             st.markdown(texto)
     if es_profesional(datos) and perfil is not None:
+        # Limpieza del input tras publicar: el flag se pone al enviar y aquí
+        # (ANTES de instanciar el widget) se retira la key para que el
+        # text_area se cree vacío en el siguiente pase del fragmento.
+        if st.session_state.get(f"pub_ok_{cata['id']}"):
+            st.session_state.pop(f"comentario_{cata['id']}", None)
+            st.session_state.pop(f"pub_ok_{cata['id']}", None)
         st.markdown("---")
         nuevo_comentario = st.text_area("Tu comentario (como gente de confianza)",
                                         key=f"comentario_{cata['id']}")
@@ -1753,8 +1793,16 @@ def seccion_comentarios(datos: dict, cata: dict):
                     "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
                     "texto": nuevo_comentario.strip()})
                 guardar(datos)
-                st.success("✅ Comentario publicado.")
-                st.rerun()
+                st.session_state[f"pub_ok_{cata['id']}"] = True  # limpiar input
+                st.toast("✅ Comentario publicado.")
+                try:
+                    # Segundo pase del fragmento: el comentario nuevo aparece
+                    # sin recargar toda la ficha (recarga parcial).
+                    st.rerun(scope="fragment")
+                except Exception:
+                    # Solo ocurre en contextos de testing (AppTest); en el
+                    # navegador el click ya dispara un fragment rerun válido.
+                    pass
     elif perfil is None:
         st.caption("👥 Inicia sesión para comentar (solo gente de confianza y admins).")
     else:

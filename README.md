@@ -63,6 +63,11 @@ app lee/escribe en Postgres automáticamente (misma interfaz). Sin ella, usa
   lista de ese usuario). El formulario de voto usa 4 pestañas (👁️👃👅✨) con la
   nota en vivo y el botón de guardar siempre visibles. Migración para la BD
   existente: `sql/por_votar.sql`.
+- **⚡ Rendimiento**: caché de datos con `@st.cache_data(ttl=300)` (una sola
+  lectura de Supabase cada 5 min o al guardar; las vistas NO hacen SELECTs
+  propios), formulario de voto dentro de `st.form` (mover sliders = 0 recargas)
+  y `@st.fragment` en el grid de "Por votar" y en los comentarios (descartar o
+  publicar recarga solo ese bloque, no la página).
 - **🔐 Sesión y Google OAuth**: "Recordarme en este dispositivo" guarda un token
   firmado HMAC-SHA256 en cookie (`streamlit-cookies-controller`; 30 días, el
   login tradicional sigue intacto) y "Continuar con Google" usa OAuth 2.0
