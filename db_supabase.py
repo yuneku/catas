@@ -126,6 +126,14 @@ def _conectar():
             conn = _POOL.getconn()
             cur = conn.cursor()
             cur.execute("SELECT 1")  # validación: detecta conexiones muertas
+            # Límite por sentencia (30 s): ninguna consulta/escritura puede
+            # colgar el servidor indefinidamente. El pooler de Supabase ignora
+            # el parámetro 'options' de libpq, así que se aplica por conexión
+            # (SET sobrevive a los resets del pool porque se re-aplica al cogerla).
+            try:
+                cur.execute("SET statement_timeout = '30s'")
+            except Exception:
+                pass  # si el pooler lo rechaza, seguir sin límite
             cur.close()
             return conn
         except Exception:
