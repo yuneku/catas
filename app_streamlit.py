@@ -350,6 +350,18 @@ footer { visibility: hidden; }
 }
 [data-testid="stSelectbox"] [data-baseweb="select"] svg { fill: #C9D2DC; }
 
+/* ---------- 3b · CONTENEDORES CON BORDE (cajas border=True) ---------- */
+/* Estilo base unificado para TODAS las cajas con borde (votos, catas de
+   productor, asociaciones, etc.): nada se queda con el borde gris por
+   defecto de Streamlit (que lee como 'post de foro'). */
+[data-testid="stVerticalBlockBorderWrapper"] {
+  background: linear-gradient(180deg, #151B24, #131820);
+  border: 1px solid #242C37; border-radius: 14px;
+}
+[data-testid="stVerticalBlockBorderWrapper"]:hover {
+  border-color: rgba(74,222,128,0.35);
+}
+
 /* ---------- 6 · SLIDERS TÁCTILES ---------- */
 [data-testid="stSlider"] [role="slider"] { width: 24px !important; height: 24px !important; margin-top: -12px !important; }
 [data-testid="stSlider"] [data-baseweb="slider"] > div > div { height: 6px; }
@@ -2317,10 +2329,14 @@ def ficha_premium(datos: dict, cata: dict):
             st.markdown(" ".join(chips_row), unsafe_allow_html=True)
             st.caption(f"{n_votos} voto{'s' if n_votos != 1 else ''}{prof_txt}")
 
-            # Imagen del producto en tarjeta con altura contenida (no entierra el título)
-            ruta_foto = core.resolver_ruta_foto(cata.get("foto"))
-            if ruta_foto:
-                st.image(ruta_foto, width="stretch")
+            # Imagen del producto en tarjeta con altura contenida (no entierra el
+            # título). En modo nube la foto es un b64 de la BD → se usa
+            # foto_base64_fluid (que omite el archivo local); en local usa la ruta.
+            foto_html = foto_base64_fluid(core.resolver_ruta_foto(cata.get("foto")),
+                                          b64=cata.get("foto_b64", ""))
+            if foto_html:
+                st.markdown(f"<div style='max-width:420px'>{foto_html}</div>",
+                            unsafe_allow_html=True)
             else:
                 st.markdown(placeholder_imagen_fluid("🌿"), unsafe_allow_html=True)
 
@@ -2833,9 +2849,10 @@ def fila_ranking(cata: dict, pos: int = None, datos: dict = None,
         c_foto, c_info, c_nota, c_ver = st.columns([1, 4, 1, 1],
                                                    vertical_alignment="center")
         with c_foto:
-            ruta_foto = core.resolver_ruta_foto(cata.get("foto"))
-            if ruta_foto:
-                st.image(ruta_foto, width=64)
+            foto_html = foto_base64(core.resolver_ruta_foto(cata.get("foto")), px=64,
+                                    radius=8, b64=cata.get("foto_b64", ""))
+            if foto_html:
+                st.markdown(foto_html, unsafe_allow_html=True)
             else:
                 st.markdown(placeholder_imagen(64, "🌿", radius=8),
                             unsafe_allow_html=True)
@@ -2948,9 +2965,10 @@ def seccion_rankings(datos: dict):
                     c_foto, c_info, c_nota, c_ver = st.columns([1, 4, 1, 1],
                                                                vertical_alignment="center")
                     with c_foto:
-                        ruta_foto = core.resolver_ruta_foto(cata.get("foto"))
-                        if ruta_foto:
-                            st.image(ruta_foto, width=64)
+                        foto_html = foto_base64(core.resolver_ruta_foto(cata.get("foto")), px=64,
+                                                radius=8, b64=cata.get("foto_b64", ""))
+                        if foto_html:
+                            st.markdown(foto_html, unsafe_allow_html=True)
                         else:
                             st.markdown(placeholder_imagen(64, "🌿", radius=8),
                                         unsafe_allow_html=True)
