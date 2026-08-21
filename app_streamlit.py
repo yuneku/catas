@@ -1711,7 +1711,14 @@ def seccion_catalogo(datos: dict):
                 st.rerun()
             return
 
-    # ---- Buscador y filtros (pills táctiles; año en desplegable) ----
+    # Filtros + grid como FRAGMENTO: cambiar un filtro re-renderiza solo este
+    # bloque (sin recargar sidebar ni releer datos).
+    _catalogo_grid(datos, admin)
+
+
+@st.fragment
+def _catalogo_grid(datos: dict, admin: bool):
+    """Buscador + filtros + grid del catálogo (recarga parcial al filtrar)."""
     texto = st.text_input("🔍 Buscar por nombre o productor", key="cat_buscar")
     c1, c2 = st.columns(2)
     with c1:
@@ -2234,117 +2241,137 @@ def seccion_productores(datos: dict):
         return
 
     prod_ficha = st.session_state.get("prod_ficha")
-    for prod in datos["productores"]:
-        catas_prod = [c for c in datos["catas"]
-                      if str(c.get("productor", "")).strip() == prod["nombre"]]
-        medias = [core.nota_media(c) for c in catas_prod]
-        media = round(sum(medias) / len(medias), 1) if medias else 0.0
+    for prod in list(datos["productores"]):
+        _tarjeta_productor(datos, prod, admin, prod_ficha)
 
-        with st.container(border=True):
-            c_foto, c_info, c_acc = st.columns([1, 3, 2])
-            with c_foto:
-                mostrar_foto(prod.get("foto"), width=80, b64=prod.get("foto_b64", ""))
-            with c_info:
-                st.markdown(f"**{prod['nombre']}**")
-                if prod.get("pais"):
-                    st.markdown(chip(prod["pais"],
-                                     core.COLOR_PAIS.get(prod["pais"], "#444444")),
-                                unsafe_allow_html=True)
-                st.caption(f"{len(catas_prod)} cata{'s' if len(catas_prod) != 1 else ''}"
-                           f" · nota media {media:.1f}")
-            with c_acc:
-                if admin:
-                    b1, b2, b3 = st.columns(3)
-                    with b1:
-                        if st.button("Abrir", key=f"prod_abrir_{prod['id']}",
-                                     use_container_width=True):
-                            st.session_state["prod_ficha"] = prod["nombre"]
-                            st.rerun()
-                    with b2:
-                        if st.button("✏️", key=f"prod_ren_{prod['id']}",
-                                     use_container_width=True):
-                            st.session_state[f"prod_edit_{prod['id']}"] = True
-                    with b3:
-                        if st.button("🗑", key=f"prod_del_{prod['id']}",
-                                     use_container_width=True):
-                            if len(catas_prod) > 0:
-                                st.error("Tiene catas asignadas: bórralas o reasígnalas "
-                                         "antes de eliminar el productor.")
-                            else:
-                                datos["productores"] = [p for p in datos["productores"]
-                                                        if p["id"] != prod["id"]]
-                                guardar(datos)
-                                st.rerun()
-                else:
+
+@st.fragment
+def _tarjeta_productor(datos: dict, prod: dict, admin: bool, prod_ficha):
+    """Tarjeta de productor como FRAGMENTO: renombrar, cambiar foto o eliminar
+    re-renderiza SOLO esta tarjeta (recarga parcial). Abrir/cerrar la ficha
+    (cambio de vista) sigue reruneando la app."""
+    # Si el productor se eliminó en este pase, el fragmento no re-renderiza
+    if not any(p.get("id") == prod.get("id") for p in datos["productores"]):
+        return
+    catas_prod = [c for c in datos["catas"]
+                  if str(c.get("productor", "")).strip() == prod["nombre"]]
+    medias = [core.nota_media(c) for c in catas_prod]
+    media = round(sum(medias) / len(medias), 1) if medias else 0.0
+
+    with st.container(border=True):
+        c_foto, c_info, c_acc = st.columns([1, 3, 2])
+        with c_foto:
+            mostrar_foto(prod.get("foto"), width=80, b64=prod.get("foto_b64", ""))
+        with c_info:
+            st.markdown(f"**{prod['nombre']}**")
+            if prod.get("pais"):
+                st.markdown(chip(prod["pais"],
+                                 core.COLOR_PAIS.get(prod["pais"], "#444444")),
+                            unsafe_allow_html=True)
+            st.caption(f"{len(catas_prod)} cata{'s' if len(catas_prod) != 1 else ''}"
+                       f" · nota media {media:.1f}")
+        with c_acc:
+            if admin:
+                b1, b2, b3 = st.columns(3)
+                with b1:
                     if st.button("Abrir", key=f"prod_abrir_{prod['id']}",
                                  use_container_width=True):
                         st.session_state["prod_ficha"] = prod["nombre"]
-                        st.rerun()
-
-            # Renombrar, país y foto: solo admin
-            if admin:
-                if st.session_state.get(f"prod_edit_{prod['id']}"):
-                    c1, c2, c3 = st.columns([3, 1, 1])
-                    with c1:
-                        nuevo_nombre = st.text_input("Nuevo nombre", prod["nombre"],
-                                                     key=f"prod_nombre_{prod['id']}")
-                    with c2:
-                        nuevo_pais_edit = st.selectbox(
-                            "País", core.PAISES_VALIDOS,
-                            index=core.PAISES_VALIDOS.index(prod["pais"])
-                            if prod.get("pais") in core.PAISES_VALIDOS else 0,
-                            key=f"prod_pais_{prod['id']}")
-                    with c3:
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        if st.button("Guardar", key=f"prod_save_{prod['id']}",
-                                     use_container_width=True):
-                            nuevo = nuevo_nombre.strip()
-                            if nuevo and nuevo != prod["nombre"]:
-                                for c in datos["catas"]:
-                                    if str(c.get("productor", "")).strip() == prod["nombre"]:
-                                        c["productor"] = nuevo
-                                prod["nombre"] = nuevo
-                            prod["pais"] = nuevo_pais_edit
+                        st.rerun()  # cambio de vista: ficha completa
+                with b2:
+                    if st.button("✏️", key=f"prod_ren_{prod['id']}",
+                                 use_container_width=True):
+                        st.session_state[f"prod_edit_{prod['id']}"] = True
+                with b3:
+                    if st.button("🗑", key=f"prod_del_{prod['id']}",
+                                 use_container_width=True):
+                        if len(catas_prod) > 0:
+                            st.error("Tiene catas asignadas: bórralas o reasígnalas "
+                                     "antes de eliminar el productor.")
+                        else:
+                            datos["productores"] = [p for p in datos["productores"]
+                                                    if p["id"] != prod["id"]]
                             guardar(datos)
-                            del st.session_state[f"prod_edit_{prod['id']}"]
-                            st.rerun()
+                            try:
+                                st.rerun(scope="fragment")
+                            except Exception:
+                                pass
+            else:
+                if st.button("Abrir", key=f"prod_abrir_{prod['id']}",
+                             use_container_width=True):
+                    st.session_state["prod_ficha"] = prod["nombre"]
+                    st.rerun()  # cambio de vista: ficha completa
 
-                # Foto del productor (accesible directamente desde la lista)
-                with st.expander(f"📷 Foto de {prod['nombre']}", expanded=False):
-                    upload = st.file_uploader(
-                        "Sube o cambia la foto del productor",
-                        type=["png", "jpg", "jpeg", "webp", "bmp", "gif"],
-                        key=f"prod_foto_{prod['id']}")
-                    if upload is not None:
-                        if st.button("Guardar foto", key=f"prod_foto_save_{prod['id']}"):
-                            rid = core.generar_id({p.get("foto", "") for p in datos["productores"]},
-                                                  prefijo="pr_")
-                            prod["foto"], prod["foto_b64"] = guardar_foto_upload(upload, rid)
-                            guardar(datos)
-                            st.rerun()
+        # Renombrar, país y foto: solo admin
+        if admin:
+            if st.session_state.get(f"prod_edit_{prod['id']}"):
+                c1, c2, c3 = st.columns([3, 1, 1])
+                with c1:
+                    nuevo_nombre = st.text_input("Nuevo nombre", prod["nombre"],
+                                                 key=f"prod_nombre_{prod['id']}")
+                with c2:
+                    nuevo_pais_edit = st.selectbox(
+                        "País", core.PAISES_VALIDOS,
+                        index=core.PAISES_VALIDOS.index(prod["pais"])
+                        if prod.get("pais") in core.PAISES_VALIDOS else 0,
+                        key=f"prod_pais_{prod['id']}")
+                with c3:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("Guardar", key=f"prod_save_{prod['id']}",
+                                 use_container_width=True):
+                        nuevo = nuevo_nombre.strip()
+                        if nuevo and nuevo != prod["nombre"]:
+                            for c in datos["catas"]:
+                                if str(c.get("productor", "")).strip() == prod["nombre"]:
+                                    c["productor"] = nuevo
+                            prod["nombre"] = nuevo
+                        prod["pais"] = nuevo_pais_edit
+                        guardar(datos)
+                        del st.session_state[f"prod_edit_{prod['id']}"]
+                        try:
+                            st.rerun(scope="fragment")
+                        except Exception:
+                            pass
 
-            # Ficha del productor (sus catas + foto)
-            if prod_ficha == prod["nombre"]:
-                st.divider()
-                st.markdown(f"**Catas de {prod['nombre']}**")
-                if not catas_prod:
-                    st.caption("Sin catas todavía.")
-                for c in sorted(catas_prod, key=lambda c: -core.nota_media(c)):
-                    cc1, cc2, cc3 = st.columns([3, 1, 1])
-                    with cc1:
-                        st.markdown(f"{c.get('nombre', '—')} · {c.get('tipo', '')} "
-                                    f"· {len(core.votos_validos(c))} voto"
-                                    f"{'s' if len(core.votos_validos(c)) != 1 else ''}")
-                    with cc2:
-                        st.markdown(f"**{core.nota_media(c):.1f}**")
-                    with cc3:
-                        if st.button("Ver", key=f"prod_cata_{c['id']}"):
-                            st.session_state["ficha_id"] = c["id"]
-                            st.session_state["pagina"] = "📦 Catálogo"
-                            st.rerun()
-                if st.button("Cerrar ficha", key=f"prod_close_{prod['id']}"):
-                    del st.session_state["prod_ficha"]
-                    st.rerun()
+            # Foto del productor (accesible directamente desde la lista)
+            with st.expander(f"📷 Foto de {prod['nombre']}", expanded=False):
+                upload = st.file_uploader(
+                    "Sube o cambia la foto del productor",
+                    type=["png", "jpg", "jpeg", "webp", "bmp", "gif"],
+                    key=f"prod_foto_{prod['id']}")
+                if upload is not None:
+                    if st.button("Guardar foto", key=f"prod_foto_save_{prod['id']}"):
+                        rid = core.generar_id({p.get("foto", "") for p in datos["productores"]},
+                                              prefijo="pr_")
+                        prod["foto"], prod["foto_b64"] = guardar_foto_upload(upload, rid)
+                        guardar(datos)
+                        try:
+                            st.rerun(scope="fragment")
+                        except Exception:
+                            pass
+
+        # Ficha del productor (sus catas + foto)
+        if prod_ficha == prod["nombre"]:
+            st.divider()
+            st.markdown(f"**Catas de {prod['nombre']}**")
+            if not catas_prod:
+                st.caption("Sin catas todavía.")
+            for c in sorted(catas_prod, key=lambda c: -core.nota_media(c)):
+                cc1, cc2, cc3 = st.columns([3, 1, 1])
+                with cc1:
+                    st.markdown(f"{c.get('nombre', '—')} · {c.get('tipo', '')} "
+                                f"· {len(core.votos_validos(c))} voto"
+                                f"{'s' if len(core.votos_validos(c)) != 1 else ''}")
+                with cc2:
+                    st.markdown(f"**{core.nota_media(c):.1f}**")
+                with cc3:
+                    if st.button("Ver", key=f"prod_cata_{c['id']}"):
+                        st.session_state["ficha_id"] = c["id"]
+                        st.session_state["pagina"] = "📦 Catálogo"
+                        st.rerun()  # cambio de vista
+            if st.button("Cerrar ficha", key=f"prod_close_{prod['id']}"):
+                del st.session_state["prod_ficha"]
+                st.rerun()  # cambio de vista
 
 
 # =============================================================================
@@ -2739,8 +2766,13 @@ def seccion_evolucion(datos: dict):
 # SECCIÓN 7 — PERFILES
 # =============================================================================
 
+@st.fragment
 def _tarjeta_perfil(datos: dict, perfil: dict, admin: bool):
-    """Tarjeta de un perfil: stats + acciones según rol (admin / propio)."""
+    """Tarjeta de un perfil como FRAGMENTO: eliminar, cambiar contraseña,
+    toggles de rango y renombrar re-renderizan SOLO esta tarjeta."""
+    # Si el perfil se eliminó en este pase, el fragmento no re-renderiza
+    if not any(p.get("id") == perfil.get("id") for p in datos["perfiles"]):
+        return
     n_votos = 0
     notas = []
     for c in datos["catas"]:
@@ -2775,7 +2807,10 @@ def _tarjeta_perfil(datos: dict, perfil: dict, admin: bool):
                         for c in datos["catas"]:
                             core.quitar_voto(c, perfil["id"])
                         guardar(datos)
-                        st.rerun()
+                        try:
+                            st.rerun(scope="fragment")
+                        except Exception:
+                            pass
 
         # Cambiar contraseña: cualquiera la suya; el admin la de cualquiera
         if es_yo or admin:
@@ -2793,7 +2828,10 @@ def _tarjeta_perfil(datos: dict, perfil: dict, admin: bool):
                         perfil["password_hash"] = hash_password(n1)
                         guardar(datos)
                         st.success("✅ Contraseña actualizada.")
-                        st.rerun()
+                        try:
+                            st.rerun(scope="fragment")
+                        except Exception:
+                            pass
 
         # Gestión (solo admin)
         if admin:
@@ -2804,7 +2842,10 @@ def _tarjeta_perfil(datos: dict, perfil: dict, admin: bool):
                 if nuevo_admin != bool(perfil.get("es_admin")):
                     perfil["es_admin"] = nuevo_admin
                     guardar(datos)
-                    st.rerun()
+                    try:
+                        st.rerun(scope="fragment")
+                    except Exception:
+                        pass
             if not es_owner:
                 nueva_confianza = st.toggle(
                     "🤝 Gente de confianza (comenta y su voto cuenta como "
@@ -2814,7 +2855,10 @@ def _tarjeta_perfil(datos: dict, perfil: dict, admin: bool):
                 if nueva_confianza != bool(perfil.get("es_confianza")):
                     perfil["es_confianza"] = nueva_confianza
                     guardar(datos)
-                    st.rerun()
+                    try:
+                        st.rerun(scope="fragment")
+                    except Exception:
+                        pass
             if st.button("✏️ Renombrar", key=f"perf_ren_{perfil['id']}"):
                 st.session_state[f"perf_edit_{perfil['id']}"] = True
             if st.session_state.get(f"perf_edit_{perfil['id']}"):
@@ -2833,7 +2877,13 @@ def _tarjeta_perfil(datos: dict, perfil: dict, admin: bool):
                                 st.session_state["usuario"] = nuevo
                             guardar(datos)
                         del st.session_state[f"perf_edit_{perfil['id']}"]
-                        st.rerun()
+                        if es_yo:  # el nombre cambia en el sidebar: rerun app
+                            st.rerun()
+                        else:
+                            try:
+                                st.rerun(scope="fragment")
+                            except Exception:
+                                pass
 
 
 # =============================================================================
@@ -3072,6 +3122,63 @@ def _panel_admin_cs_inner(datos: dict):
                         st.rerun()
 
 
+@st.fragment
+def _votacion_cs(datos: dict, cs: dict):
+    """Valoración del local como FRAGMENTO: guardar/quitar valoración
+    re-renderiza SOLO este bloque (sin recargar la ficha ni la app)."""
+    st.markdown("### 🗳 Valoración del local")
+    usuario = st.session_state.get("usuario", "")
+    if not usuario:
+        st.info("🔒 Inicia sesión para valorar este local.")
+        if st.button("🔑 Iniciar sesión", key="cs_login"):
+            st.session_state["pagina"] = "🔐 Acceso"
+            st.rerun()
+        return
+    perfil = perfil_por_nombre(datos, usuario)
+    if perfil is None:
+        st.warning("Perfil no encontrado.")
+        return
+    ya_votado = core.voto_coffeeshop_de_perfil(cs, perfil["id"])
+    v1, v2 = st.columns([1, 1])
+    with v1:
+        nota_slider = st.slider("Nota", 0.0, 10.0, 5.0, 0.5,
+                                key=f"cs_sl_{cs['id']}")
+    with v2:
+        comentario = st.text_input(
+            "Comentario (opcional)",
+            value=(ya_votado.get("comentario", "") if ya_votado else ""),
+            key=f"cs_com_{cs['id']}")
+    if st.button("💾 Guardar mi valoración", type="primary",
+                 key="cs_guardar_voto", use_container_width=True):
+        core.upsert_voto_coffeeshop(cs, perfil["id"], nota_slider, comentario)
+        guardar(datos)
+        st.toast("✅ Valoración guardada.")
+        try:
+            st.rerun(scope="fragment")
+        except Exception:
+            pass
+    if ya_votado:
+        st.caption(f"Tu voto actual: ⭐ {ya_votado['nota']:.1f}"
+                   + (f" — {ya_votado['comentario']}"
+                      if ya_votado.get("comentario") else ""))
+        if st.button("🗑 Quitar mi voto", key="cs_quitar_voto"):
+            core.quitar_voto_coffeeshop(cs, perfil["id"])
+            guardar(datos)
+            try:
+                st.rerun(scope="fragment")
+            except Exception:
+                pass
+    # Lista de valoraciones
+    votos = core.votos_coffeeshop_validos(cs)
+    if votos:
+        st.caption("Valoraciones:")
+        for v in sorted(votos, key=lambda x: -x["nota"]):
+            nombre_v = next((p["nombre"] for p in datos["perfiles"]
+                             if p.get("id") == v["perfil_id"]), v["perfil_id"])
+            extra = f" — {v['comentario']}" if v.get("comentario") else ""
+            st.caption(f"⭐ {v['nota']:.1f} · {nombre_v}{extra}")
+
+
 def ficha_coffeeshop(datos: dict, cs: dict):
     """Ficha individual: cabecera, biografía, valoración y menú por productor."""
     st.button("← Volver al listado", key="cs_volver", use_container_width=True,
@@ -3122,51 +3229,7 @@ def ficha_coffeeshop(datos: dict, cs: dict):
 
     # ---- Valoración (solo usuarios logueados) ----
     st.divider()
-    st.markdown("### 🗳 Valoración del local")
-    usuario = st.session_state.get("usuario", "")
-    if not usuario:
-        st.info("🔒 Inicia sesión para valorar este local.")
-        if st.button("🔑 Iniciar sesión", key="cs_login"):
-            st.session_state["pagina"] = "🔐 Acceso"
-            st.rerun()
-    else:
-        perfil = perfil_por_nombre(datos, usuario)
-        if perfil is None:
-            st.warning("Perfil no encontrado.")
-        else:
-            ya_votado = core.voto_coffeeshop_de_perfil(cs, perfil["id"])
-            v1, v2 = st.columns([1, 1])
-            with v1:
-                nota_slider = st.slider("Nota", 0.0, 10.0, 5.0, 0.5,
-                                        key=f"cs_sl_{cs['id']}")
-            with v2:
-                comentario = st.text_input(
-                    "Comentario (opcional)",
-                    value=(ya_votado.get("comentario", "") if ya_votado else ""),
-                    key=f"cs_com_{cs['id']}")
-            if st.button("💾 Guardar mi valoración", type="primary",
-                         key="cs_guardar_voto", use_container_width=True):
-                core.upsert_voto_coffeeshop(cs, perfil["id"], nota_slider, comentario)
-                guardar(datos)
-                st.success("✅ Valoración guardada.")
-                st.rerun()
-            if ya_votado:
-                st.caption(f"Tu voto actual: ⭐ {ya_votado['nota']:.1f}"
-                           + (f" — {ya_votado['comentario']}"
-                              if ya_votado.get("comentario") else ""))
-                if st.button("🗑 Quitar mi voto", key="cs_quitar_voto"):
-                    core.quitar_voto_coffeeshop(cs, perfil["id"])
-                    guardar(datos)
-                    st.rerun()
-            # Lista de valoraciones
-            votos = core.votos_coffeeshop_validos(cs)
-            if votos:
-                st.caption("Valoraciones:")
-                for v in sorted(votos, key=lambda x: -x["nota"]):
-                    nombre_v = next((p["nombre"] for p in datos["perfiles"]
-                                     if p.get("id") == v["perfil_id"]), v["perfil_id"])
-                    extra = f" — {v['comentario']}" if v.get("comentario") else ""
-                    st.caption(f"⭐ {v['nota']:.1f} · {nombre_v}{extra}")
+    _votacion_cs(datos, cs)
 
     # ---- Menú / materiales disponibles por productor ----
     st.divider()
