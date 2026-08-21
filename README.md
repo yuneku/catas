@@ -1,4 +1,4 @@
-# 🌿 Sistema de Catas de Cannabis
+# 🌿 TerpsXHunter — Sistema de Catas de Cannabis
 
 App web multi-usuario (Streamlit, mobile-first) para registrar catas, votar por
 bloques (Visual / Aroma / Sabor / Efectos), consultar rankings y evolución,

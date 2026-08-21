@@ -65,7 +65,7 @@ core._avisar_error = lambda *args, **kwargs: st.error(
     args[0] if args else "Error de datos")
 
 st.set_page_config(
-    page_title="🌿 Sistema de Catas",
+    page_title="🌿 TerpsXHunter",
     page_icon="🌿",
     layout="wide",
     initial_sidebar_state="collapsed",  # mobile-first: sidebar colapsado al abrir
@@ -416,6 +416,7 @@ def foto_base64(ruta: str, px: int = 76, radius: int = 10, b64: str = "") -> str
 
 # Memoización de thumbnails b64 (modo nube): (md5, px, radius) -> thumb ligero.
 _THUMBS = {}
+_THUMBS_MAX = 600  # defensa: si crece demasiado, se vacía (se regenera solo)
 
 
 def _foto_b64_thumb(b64: str, px: int = 84, radius: int = 10) -> str:
@@ -425,6 +426,8 @@ def _foto_b64_thumb(b64: str, px: int = 84, radius: int = 10) -> str:
         return ""
     clave = (hashlib.md5(b64.encode("utf-8")).hexdigest(), px, radius)
     if clave not in _THUMBS:
+        if len(_THUMBS) > _THUMBS_MAX:
+            _THUMBS.clear()
         _THUMBS[clave] = _b64_a_jpeg(b64, px, cuadrado=True)
     return _THUMBS[clave]
 
@@ -435,6 +438,8 @@ def _foto_b64_redim(b64: str, max_lado: int = 400) -> str:
         return ""
     clave = (hashlib.md5(b64.encode("utf-8")).hexdigest(), max_lado, 0)
     if clave not in _THUMBS:
+        if len(_THUMBS) > _THUMBS_MAX:
+            _THUMBS.clear()
         _THUMBS[clave] = _b64_a_jpeg(b64, max_lado, cuadrado=False)
     return _THUMBS[clave]
 
@@ -794,12 +799,12 @@ def podium_epico(lista, nota_fn=None):
 def paginas_para(datos: dict) -> list:
     """Secciones del menú según el rol:
     - Invitado: ve TODAS (al tocar una restringida se le pide iniciar sesión).
-    - Admin: todas (puede crear productos).
+    - Admin / gente de confianza: todas (pueden crear productos).
     - Usuario normal: todo menos crear productos (➕ Nueva Cata)."""
     if not st.session_state.get("usuario"):
         return ["📦 Catálogo", "➕ Nueva Cata", "🎯 Por votar", "🏭 Productores",
                 "🏆 Rankings", "📈 Evolución", "🏪 Asociaciones", "👥 Perfiles"]
-    if es_admin(datos):
+    if es_admin(datos) or es_profesional(datos):
         return ["📦 Catálogo", "➕ Nueva Cata", "🎯 Por votar", "🏭 Productores",
                 "🏆 Rankings", "📈 Evolución", "🏪 Asociaciones", "👥 Perfiles"]
     return ["📦 Catálogo", "🎯 Por votar", "🏭 Productores",
@@ -824,7 +829,7 @@ def menu_movil(datos: dict):
 
 def sidebar(datos: dict):
     with st.sidebar:
-        st.markdown("## 🌿 CATAS")
+        st.markdown("## 🌿 TerpsXHunter")
         st.caption("registro & rankings · web")
 
         # ---- Estado de datos (diagnóstico de conexión) ----
@@ -1204,7 +1209,7 @@ def _manejar_retorno_oauth(datos: dict):
 
 def pantalla_login(datos: dict):
     """Muestra login y registro; solo se llega al resto de la app con sesión."""
-    st.markdown("## 🌿 Sistema de Catas")
+    st.markdown("## 🌿 TerpsXHunter")
     st.caption("Inicia sesión con tu perfil para votar. ¿No tienes cuenta? "
                "Crea una abajo (solo nombre y contraseña).")
 
@@ -1308,11 +1313,12 @@ def pantalla_login(datos: dict):
 
 def seccion_nueva_cata(datos: dict):
     st.markdown("## ➕ Nueva Cata")
-    # Crear productos es exclusivo de administradores (los demás solo votan)
-    if not es_admin(datos):
-        st.warning("🔒 Solo los **administradores** pueden crear productos nuevos. "
-                   "Tú puedes votar desde **🎯 Por votar** o abriendo la ficha de "
-                   "cualquier producto en **📦 Catálogo**.")
+    # Crear productos: administradores y gente de confianza (los demás votan)
+    if not es_profesional(datos):
+        st.warning("🔒 Solo los **administradores** y la **gente de confianza** "
+                   "pueden crear productos nuevos. Tú puedes votar desde "
+                   "**🎯 Por votar** o abriendo la ficha de cualquier producto en "
+                   "**📦 Catálogo**.")
         return
     perfil = perfil_activo(datos)
     if perfil is None:
@@ -1512,15 +1518,23 @@ def lista_por_votar(datos: dict, perfil: dict, perfil_id: str):
             st.success("🎉 ¡Ya has votado todos los productos del catálogo!")
         return
 
+    # Paginación: arranca en 12 tarjetas; 'Mostrar más' amplía (fragmento)
+    n_max = st.session_state.get("pv_n", 12)
+    mostrar = pendientes[:n_max]
+
     # Grid responsive 3-2-1 (misma regla CSS que el Catálogo)
     with st.container(key="grid_por_votar"):
-        for i in range(0, len(pendientes), 3):
-            fila = pendientes[i:i + 3]
+        for i in range(0, len(mostrar), 3):
+            fila = mostrar[i:i + 3]
             cols = st.columns(3)
             for col, cata in zip(cols, fila):
                 with col:
                     with st.container(border=True):
                         tarjeta_por_votar(cata, datos, perfil_id)
+    if len(pendientes) > n_max:
+        if st.button(f"⬇️ Mostrar más ({len(pendientes) - n_max} restantes)",
+                     key="pv_mas", use_container_width=True):
+            st.session_state["pv_n"] = n_max + 12
 
 
 def tarjeta_por_votar(cata: dict, datos: dict, perfil_id: str):
@@ -1837,15 +1851,24 @@ def _catalogo_grid(datos: dict, admin: bool):
         st.info("Sin productos con esos criterios.")
         return
 
+    # Paginación: el grid arranca en 12 tarjetas; 'Mostrar más' amplía
+    # (el botón vive en el fragmento → solo se re-renderiza este bloque).
+    n_max = st.session_state.get("cat_n", 12)
+    mostrar = lista[:n_max]
+
     # Grid de tarjetas: 3 por fila en desktop (CSS: 2 en tablets, 1 en móvil)
     with st.container(key="grid_catalogo"):
-        for i in range(0, len(lista), 3):
-            fila = lista[i:i + 3]
+        for i in range(0, len(mostrar), 3):
+            fila = mostrar[i:i + 3]
             cols = st.columns(3)
             for col, cata in zip(cols, fila):
                 with col:
                     with st.container(border=True):
                         tarjeta_catalogo(cata, datos, admin)
+    if len(lista) > n_max:
+        if st.button(f"⬇️ Mostrar más ({len(lista) - n_max} restantes)",
+                     key="cat_mas", use_container_width=True):
+            st.session_state["cat_n"] = n_max + 12
 
 
 @st.fragment
