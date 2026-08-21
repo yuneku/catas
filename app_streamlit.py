@@ -921,7 +921,7 @@ def menu_movil(datos: dict):
     """Botón '☰ Menú' (visible solo en móvil por CSS) que despliega la
     navegación en la propia página. Streamlit no permite abrir el sidebar
     nativo con JS (sanitiza scripts), así que es un panel propio, más visual."""
-    if st.button("☰ Menú", key="btn_menu", use_container_width=True):
+    if st.button("☰ Menú", key="btn_menu", width="stretch"):
         st.session_state["menu_abierto"] = not st.session_state.get("menu_abierto", False)
     if st.session_state.get("menu_abierto"):
         with st.container(border=True):
@@ -929,11 +929,11 @@ def menu_movil(datos: dict):
             with c1:
                 st.caption("🗺 Navegación")
             with c2:
-                if st.button("✕", key="menu_cerrar", use_container_width=True):
+                if st.button("✕", key="menu_cerrar", width="stretch"):
                     st.session_state["menu_abierto"] = False
                     st.rerun()
             for p in paginas_para(datos):
-                if st.button(p, key=f"menu_{p}", use_container_width=True):
+                if st.button(p, key=f"menu_{p}", width="stretch"):
                     st.session_state["pagina"] = p
                     st.session_state["menu_abierto"] = False
                     st.rerun()
@@ -1019,14 +1019,14 @@ def sidebar(datos: dict):
             badge = "  👑" if es_admin(datos) else (
                 "  🤝" if perfil is not None and perfil.get("es_confianza") else "")
             st.markdown(f"**👤 {usuario}**{badge}")
-            if st.button("🚪 Cerrar sesión", use_container_width=True):
+            if st.button("🚪 Cerrar sesión", width="stretch"):
                 _borrar_cookie()  # olvidar el dispositivo
                 st.session_state.pop("usuario", None)
                 st.session_state["pagina"] = "📦 Catálogo"
                 st.rerun()
         else:
             st.markdown("**👤 Invitado** *(solo lectura)*")
-            if st.button("🔑 Iniciar sesión", use_container_width=True):
+            if st.button("🔑 Iniciar sesión", width="stretch"):
                 st.session_state["pagina"] = "🔐 Acceso"
                 st.rerun()
 
@@ -1361,7 +1361,7 @@ def pantalla_login(datos: dict):
                              autocomplete="current-password")
         l_recordar = st.checkbox("🔒 Recordarme en este dispositivo", value=True)
         entrar = st.form_submit_button("🔓 Entrar", type="primary",
-                                       use_container_width=True)
+                                       width="stretch")
     if entrar:
         nombre = l_nombre.strip()
         perfil = perfil_por_nombre(datos, nombre)
@@ -1413,7 +1413,7 @@ def pantalla_login(datos: dict):
                              key="reg_pw", autocomplete="new-password")
         r_pw2 = st.text_input("Repite la contraseña", type="password", key="reg_pw2",
                               autocomplete="new-password")
-        crear = st.form_submit_button("➕ Crear cuenta", use_container_width=True)
+        crear = st.form_submit_button("➕ Crear cuenta", width="stretch")
     if crear:
         nombre = r_nombre.strip()
         if not nombre:
@@ -1443,7 +1443,7 @@ def pantalla_login(datos: dict):
                    f"{', '.join(sin_pw)}")
 
     st.divider()
-    if st.button("← Volver como invitado", use_container_width=True):
+    if st.button("← Volver como invitado", width="stretch"):
         st.session_state["pagina"] = "📦 Catálogo"
         st.rerun()
 
@@ -1568,7 +1568,7 @@ def seccion_nueva_cata(datos: dict):
                                value=coment_inicial, key="f_comentarios")
 
     # ---- Guardar (CTA principal; sticky al fondo en móvil por CSS) ----
-    if st.button("💾 Guardar voto", type="primary", use_container_width=True,
+    if st.button("💾 Guardar voto", type="primary", width="stretch",
                  key="btn_guardar_voto"):
         if not nombre.strip():
             st.error("El nombre de la muestra es obligatorio.")
@@ -1687,7 +1687,7 @@ def lista_por_votar(datos: dict, perfil: dict, perfil_id: str):
                         tarjeta_por_votar(cata, datos, perfil_id)
     if len(pendientes) > n_max:
         if st.button(f"⬇️ Mostrar más ({len(pendientes) - n_max} restantes)",
-                     key="pv_mas", use_container_width=True):
+                     key="pv_mas", width="stretch"):
             st.session_state["pv_n"] = n_max + 12
 
     # ---- Descartados: recuperar si fue accidental (recarga parcial) ----
@@ -1700,7 +1700,7 @@ def lista_por_votar(datos: dict, perfil: dict, perfil_id: str):
                     st.markdown(f"**{_html.escape(str(c.get('nombre', '—')))}**")
                 with c2:
                     if st.button("↩ Recuperar", key=f"pv_undo_{c['id']}",
-                                 use_container_width=True):
+                                 width="stretch"):
                         core.quitar_descarte(datos, c["id"], perfil_id)
                         guardar(datos)
                         st.toast(f"↩ '{c.get('nombre', '')}' de vuelta en tu lista")
@@ -1770,11 +1770,11 @@ def tarjeta_por_votar(cata: dict, datos: dict, perfil_id: str):
 
     # Botones apilados a ancho completo: Votar (CTA) y 'No lo probé'
     if st.button("🗳 Votar", type="primary", key=f"pv_votar_{cata['id']}",
-                 use_container_width=True):
+                 width="stretch"):
         st.session_state["votar_id"] = cata["id"]
         st.rerun(scope="app")  # cambio de vista: formulario a ancho completo
     if st.button("🙈 No lo probé", key=f"pv_no_{cata['id']}",
-                 use_container_width=True):
+                 width="stretch"):
         if core.descartar_cata(datos, cata["id"], perfil_id) == "nuevo":
             guardar(datos)  # solo persiste si no estaba ya descartada
         st.toast(f"🙈 '{nombre_txt}' marcado como no probado")
@@ -1816,13 +1816,13 @@ def formulario_voto(datos: dict, cata: dict, perfil: dict, perfil_id: str):
             c1, c2 = st.columns([2, 1])
             with c1:
                 ver_nota = st.form_submit_button("👁 Ver mi nota",
-                                                 use_container_width=True)
+                                                 width="stretch")
             with c2:
                 guardar_voto = st.form_submit_button("💾 Guardar mi voto",
                                                      type="primary",
-                                                     use_container_width=True)
+                                                     width="stretch")
             no_probe = st.form_submit_button("🙈 No lo probé",
-                                             use_container_width=True)
+                                             width="stretch")
 
     if guardar_voto:
         scores = obtener_scores_actuales(prefijo_pv)
@@ -1888,13 +1888,13 @@ def dialogo_eliminar_producto(datos: dict, cata: dict):
     st.warning("Esta acción no se puede deshacer.")
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("Sí, eliminar", type="primary", use_container_width=True):
+        if st.button("Sí, eliminar", type="primary", width="stretch"):
             datos["catas"] = [c for c in datos["catas"] if c.get("id") != cata.get("id")]
             guardar(datos)
             st.success("Producto eliminado.")
             st.rerun()
     with c2:
-        if st.button("Cancelar", use_container_width=True):
+        if st.button("Cancelar", width="stretch"):
             st.rerun()
 
 
@@ -1951,12 +1951,12 @@ def tarjeta_catalogo(cata: dict, datos: dict, admin: bool):
     # TODA la tarjeta → tocar foto, nombre, chips o el hueco abre la ficha,
     # sin zona muerta. El 🗑 del admin queda por encima y sigue pulsable.
     if st.button("📂 Abrir ficha", key=f"abrir_{cata['id']}",
-                 use_container_width=True):
+                 width="stretch"):
         st.session_state["ficha_id"] = cata["id"]
         st.rerun()
     if admin:
         if st.button("🗑 Eliminar", key=f"del_{cata['id']}",
-                     use_container_width=True):
+                     width="stretch"):
             dialogo_eliminar_producto(datos, cata)
 
 
@@ -2048,7 +2048,7 @@ def _catalogo_grid(datos: dict, admin: bool):
                         tarjeta_catalogo(cata, datos, admin)
     if len(lista) > n_max:
         if st.button(f"⬇️ Mostrar más ({len(lista) - n_max} restantes)",
-                     key="cat_mas", use_container_width=True):
+                     key="cat_mas", width="stretch"):
             st.session_state["cat_n"] = n_max + 12
 
 
@@ -2082,7 +2082,7 @@ def seccion_comentarios(datos: dict, cata: dict):
         nuevo_comentario = st.text_area("Tu comentario (como gente de confianza)",
                                         key=f"comentario_{cata['id']}")
         if st.button("📝 Publicar comentario", key=f"pub_com_{cata['id']}",
-                     use_container_width=True):
+                     width="stretch"):
             if nuevo_comentario.strip():
                 cata.setdefault("comentarios_usuarios", []).append({
                     "perfil_id": perfil["id"],
@@ -2176,7 +2176,7 @@ def ficha_premium(datos: dict, cata: dict):
         with col_izq:
             ruta_foto = core.resolver_ruta_foto(cata.get("foto"))
             if ruta_foto:
-                st.image(ruta_foto, use_container_width=True)
+                st.image(ruta_foto, width="stretch")
             else:
                 st.markdown(placeholder_imagen_fluid("🌿"), unsafe_allow_html=True)
 
@@ -2396,7 +2396,7 @@ def ficha_edicion(datos: dict, cata: dict):
             with c2:
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("➕ Añadir voto", key=f"btn_nuevo_voto_{cata['id']}",
-                             use_container_width=True):
+                             width="stretch"):
                     p = perfil_por_nombre(datos, nuevo_perfil)
                     st.session_state[f"nv_{cata['id']}_{p['id']}"] = True
                     st.rerun()
@@ -2509,7 +2509,7 @@ def seccion_productores(datos: dict):
             nuevo_pais = st.selectbox("País", core.PAISES_VALIDOS, key="prod_pais")
         with c3:
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("➕ Añadir productor", type="primary", use_container_width=True):
+            if st.button("➕ Añadir productor", type="primary", width="stretch"):
                 nombre = nuevo_prod.strip()
                 if not nombre:
                     st.error("Escribe un nombre.")
@@ -2565,16 +2565,16 @@ def _tarjeta_productor(datos: dict, prod: dict, admin: bool, prod_ficha):
                 b1, b2, b3 = st.columns(3)
                 with b1:
                     if st.button("Abrir", key=f"prod_abrir_{prod['id']}",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state["prod_ficha"] = prod["nombre"]
                         st.rerun()  # cambio de vista: ficha completa
                 with b2:
                     if st.button("✏️", key=f"prod_ren_{prod['id']}",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state[f"prod_edit_{prod['id']}"] = True
                 with b3:
                     if st.button("🗑", key=f"prod_del_{prod['id']}",
-                                 use_container_width=True):
+                                 width="stretch"):
                         if len(catas_prod) > 0:
                             st.error("Tiene catas asignadas: bórralas o reasígnalas "
                                      "antes de eliminar el productor.")
@@ -2588,7 +2588,7 @@ def _tarjeta_productor(datos: dict, prod: dict, admin: bool, prod_ficha):
                                 pass
             else:
                 if st.button("Abrir", key=f"prod_abrir_{prod['id']}",
-                             use_container_width=True):
+                             width="stretch"):
                     st.session_state["prod_ficha"] = prod["nombre"]
                     st.rerun()  # cambio de vista: ficha completa
 
@@ -2608,7 +2608,7 @@ def _tarjeta_productor(datos: dict, prod: dict, admin: bool, prod_ficha):
                 with c3:
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.button("Guardar", key=f"prod_save_{prod['id']}",
-                                 use_container_width=True):
+                                 width="stretch"):
                         nuevo = nuevo_nombre.strip()
                         if nuevo and nuevo != prod["nombre"]:
                             for c in datos["catas"]:
@@ -2721,7 +2721,7 @@ def fila_ranking(cata: dict, pos: int = None, datos: dict = None,
                 st.caption(etiqueta_nota)
         # Enrutamiento cruzado: Rankings -> Detalle del Catálogo
         if st.button("📂 Ver ficha", key=f"abrir_{prefijo_key}_{cata['id']}",
-                     use_container_width=True):
+                     width="stretch"):
             st.session_state["producto_seleccionado"] = cata["id"]
             st.session_state["ficha_id"] = cata["id"]
             st.session_state["pagina"] = "📦 Catálogo"
@@ -2834,7 +2834,7 @@ def seccion_rankings(datos: dict):
                             unsafe_allow_html=True)
                     # Enrutamiento cruzado: Top Personal -> Detalle del Catálogo
                     if st.button("📂 Ver ficha", key=f"abrir_rkp_{cata['id']}",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state["producto_seleccionado"] = cata["id"]
                         st.session_state["ficha_id"] = cata["id"]
                         st.session_state["pagina"] = "📦 Catálogo"
@@ -3159,7 +3159,7 @@ def _tarjeta_perfil(datos: dict, perfil: dict, admin: bool):
                 with e2:
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.button("Guardar", key=f"perf_save_{perfil['id']}",
-                                 use_container_width=True):
+                                 width="stretch"):
                         nuevo = nuevo_nombre.strip()
                         if nuevo:
                             perfil["nombre"] = nuevo
@@ -3240,7 +3240,7 @@ def _panel_admin_cs_inner(datos: dict):
         c1, c2 = st.columns(2)
         with c1:
             nuevo_pais = st.text_input("➕ Nuevo país", key="cs_pais_nuevo")
-            if st.button("Añadir país", key="cs_btn_pais", use_container_width=True):
+            if st.button("Añadir país", key="cs_btn_pais", width="stretch"):
                 if core.upsert_pais(datos, nuevo_pais):
                     guardar(datos)
                     st.success(f"✅ País '{nuevo_pais.strip()}' añadido.")
@@ -3253,7 +3253,7 @@ def _panel_admin_cs_inner(datos: dict):
             pais_sel = st.selectbox("País de la ciudad", list(paises) or ["—"],
                                     key="cs_ciud_pais")
             nueva_ciudad = st.text_input("➕ Nueva ciudad", key="cs_ciud_nueva")
-            if st.button("Añadir ciudad", key="cs_btn_ciud", use_container_width=True):
+            if st.button("Añadir ciudad", key="cs_btn_ciud", width="stretch"):
                 pid = paises.get(pais_sel, "")
                 if pid and core.upsert_ciudad(datos, nueva_ciudad, pid):
                     guardar(datos)
@@ -3281,7 +3281,7 @@ def _panel_admin_cs_inner(datos: dict):
                                       type=["png", "jpg", "jpeg", "webp", "bmp", "gif"],
                                       key="cs_nuevo_foto")
         if st.button("💾 Crear coffeeshop", type="primary",
-                     key="cs_btn_crear", use_container_width=True):
+                     key="cs_btn_crear", width="stretch"):
             pid = paises.get(cs_pais, "")
             cid = next((c["id"] for c in datos.get("ciudades", [])
                         if c.get("nombre") == cs_ciudad
@@ -3315,7 +3315,7 @@ def _panel_admin_cs_inner(datos: dict):
             with v2:
                 elegidos = st.multiselect("Productores en el menú", list(prod_opciones),
                                           default=actuales, key="cs_vin_prods")
-            if st.button("💾 Guardar menú", key="cs_btn_vin", use_container_width=True):
+            if st.button("💾 Guardar menú", key="cs_btn_vin", width="stretch"):
                 elegidos_ids = {prod_opciones[n] for n in elegidos}
                 for pid in vinculados - elegidos_ids:
                     core.desvincular_productor_cs(cs_obj, pid)
@@ -3335,7 +3335,7 @@ def _panel_admin_cs_inner(datos: dict):
             sel_pais_del = st.selectbox("País", list(paises_nombres) or ["—"],
                                         key="cs_del_pais")
             if st.button("🗑 Eliminar país", key="cs_btn_del_pais",
-                         use_container_width=True):
+                         width="stretch"):
                 st.session_state["cs_confirm_pais"] = sel_pais_del
             if st.session_state.get("cs_confirm_pais"):
                 _nom = st.session_state["cs_confirm_pais"]
@@ -3343,7 +3343,7 @@ def _panel_admin_cs_inner(datos: dict):
                 cc1, cc2 = st.columns(2)
                 with cc1:
                     if st.button("✅ Sí", key="cs_confirm_pais_si",
-                                 use_container_width=True):
+                                 width="stretch"):
                         pid = paises_nombres.get(
                             st.session_state.pop("cs_confirm_pais", ""), "")
                         n_cs = core.eliminar_pais(datos, pid)
@@ -3353,7 +3353,7 @@ def _panel_admin_cs_inner(datos: dict):
                         st.rerun()
                 with cc2:
                     if st.button("❌ No", key="cs_confirm_pais_no",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state.pop("cs_confirm_pais", None)
                         st.rerun()
         # Ciudad
@@ -3363,7 +3363,7 @@ def _panel_admin_cs_inner(datos: dict):
             sel_ciud_del = st.selectbox("Ciudad", list(ciudades_nombres) or ["—"],
                                         key="cs_del_ciudad")
             if st.button("🗑 Eliminar ciudad", key="cs_btn_del_ciudad",
-                         use_container_width=True):
+                         width="stretch"):
                 st.session_state["cs_confirm_ciudad"] = sel_ciud_del
             if st.session_state.get("cs_confirm_ciudad"):
                 _nom = st.session_state["cs_confirm_ciudad"]
@@ -3371,7 +3371,7 @@ def _panel_admin_cs_inner(datos: dict):
                 cc1, cc2 = st.columns(2)
                 with cc1:
                     if st.button("✅ Sí", key="cs_confirm_ciudad_si",
-                                 use_container_width=True):
+                                 width="stretch"):
                         cid = ciudades_nombres.get(
                             st.session_state.pop("cs_confirm_ciudad", ""), "")
                         core.eliminar_ciudad(datos, cid)
@@ -3380,7 +3380,7 @@ def _panel_admin_cs_inner(datos: dict):
                         st.rerun()
                 with cc2:
                     if st.button("❌ No", key="cs_confirm_ciudad_no",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state.pop("cs_confirm_ciudad", None)
                         st.rerun()
         # Asociación
@@ -3390,7 +3390,7 @@ def _panel_admin_cs_inner(datos: dict):
             sel_cs_del = st.selectbox("Asociación", list(cs_nombres_del) or ["—"],
                                       key="cs_del_cs")
             if st.button("🗑 Eliminar asociación", key="cs_btn_del_cs",
-                         use_container_width=True):
+                         width="stretch"):
                 st.session_state["cs_confirm_cs"] = sel_cs_del
             if st.session_state.get("cs_confirm_cs"):
                 _nom = st.session_state["cs_confirm_cs"]
@@ -3398,7 +3398,7 @@ def _panel_admin_cs_inner(datos: dict):
                 cc1, cc2 = st.columns(2)
                 with cc1:
                     if st.button("✅ Sí", key="cs_confirm_cs_si",
-                                 use_container_width=True):
+                                 width="stretch"):
                         cid = cs_nombres_del.get(
                             st.session_state.pop("cs_confirm_cs", ""), "")
                         core.eliminar_coffeeshop(datos, cid)
@@ -3407,7 +3407,7 @@ def _panel_admin_cs_inner(datos: dict):
                         st.rerun()
                 with cc2:
                     if st.button("❌ No", key="cs_confirm_cs_no",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state.pop("cs_confirm_cs", None)
                         st.rerun()
 
@@ -3439,7 +3439,7 @@ def _votacion_cs(datos: dict, cs: dict):
             value=(ya_votado.get("comentario", "") if ya_votado else ""),
             key=f"cs_com_{cs['id']}")
     if st.button("💾 Guardar mi valoración", type="primary",
-                 key="cs_guardar_voto", use_container_width=True):
+                 key="cs_guardar_voto", width="stretch"):
         core.upsert_voto_coffeeshop(cs, perfil["id"], nota_slider, comentario)
         guardar(datos)
         st.toast("✅ Valoración guardada.")
@@ -3471,7 +3471,7 @@ def _votacion_cs(datos: dict, cs: dict):
 
 def ficha_coffeeshop(datos: dict, cs: dict):
     """Ficha individual: cabecera, biografía, valoración y menú por productor."""
-    st.button("← Volver al listado", key="cs_volver", use_container_width=True,
+    st.button("← Volver al listado", key="cs_volver", width="stretch",
               on_click=lambda: (st.session_state.pop("cs_ficha", None), st.rerun()))
     ciudad = core.ciudad_por_id(datos, cs.get("ciudad_id", "")).get("nombre", "")
     pais = core.pais_por_id(datos, cs.get("pais_id", "")).get("nombre", "")
@@ -3494,7 +3494,7 @@ def ficha_coffeeshop(datos: dict, cs: dict):
                                        key=f"cs_foto_up_{cs['id']}")
             if up_foto is not None:
                 if st.button("💾 Guardar foto", key=f"cs_foto_save_{cs['id']}",
-                             use_container_width=True):
+                             width="stretch"):
                     _, b64 = guardar_foto_upload(up_foto, cs["id"])
                     cs["foto_b64"] = b64
                     guardar(datos)
@@ -3562,7 +3562,7 @@ def ficha_coffeeshop(datos: dict, cs: dict):
         st.divider()
         _confirm_key = f"cs_confirm_ficha_{cs['id']}"
         if st.button("🗑 Eliminar esta asociación", key=f"cs_del_ficha_{cs['id']}",
-                     use_container_width=True):
+                     width="stretch"):
             st.session_state[_confirm_key] = True
         if st.session_state.get(_confirm_key):
             st.warning(f"¿Seguro que quieres eliminar **{cs.get('nombre', '')}**? "
@@ -3570,7 +3570,7 @@ def ficha_coffeeshop(datos: dict, cs: dict):
             fc1, fc2 = st.columns(2)
             with fc1:
                 if st.button("✅ Sí, eliminar", key=f"cs_yes_ficha_{cs['id']}",
-                             use_container_width=True):
+                             width="stretch"):
                     core.eliminar_coffeeshop(datos, cs["id"])
                     guardar(datos)
                     st.session_state.pop(_confirm_key, None)
@@ -3579,7 +3579,7 @@ def ficha_coffeeshop(datos: dict, cs: dict):
                     st.rerun()
             with fc2:
                 if st.button("❌ Cancelar", key=f"cs_no_ficha_{cs['id']}",
-                             use_container_width=True):
+                             width="stretch"):
                     st.session_state.pop(_confirm_key, None)
                     st.rerun()
 
@@ -3647,7 +3647,7 @@ def seccion_asociaciones(datos: dict):
                                 unsafe_allow_html=True)
                     if st.button("👁 Ver Asociación",
                                  key=f"cs_ver_{cs['id']}",
-                                 use_container_width=True):
+                                 width="stretch"):
                         st.session_state["cs_ficha"] = cs["id"]
                         st.rerun()
 
