@@ -38,6 +38,7 @@ import urllib.parse
 import urllib.request
 import html as _html
 from datetime import datetime
+import time
 
 import pandas as pd
 import streamlit as st
@@ -124,11 +125,28 @@ def cargar() -> dict:
     return core.cargar_datos()
 
 
-def guardar(datos: dict):
-    """Persiste los datos: backup del estado previo + escritura + invalida caché."""
+def guardar(datos: dict) -> bool:
+    """Persiste los datos: backup del estado previo + escritura + invalida caché.
+
+    Respaldo/robustez (mejora backend):
+      - Reintenta UNA vez ante errores transitorios (pooler/red) y solo limpia
+        la caché en éxito, así la UI nunca se queda con datos "fantasma".
+      - Devuelve True/False y, si falla, muestra un toast de error para que el
+        usuario sepa que debe reintentar (antes el fallo pasaba callado)."""
     _backup_antes_de_guardar()
-    core.guardar_datos(datos)
+    intentos = 0
+    while True:
+        try:
+            core.guardar_datos(datos)
+            break
+        except Exception as e:
+            intentos += 1
+            if intentos >= 2:
+                st.toast(f"No se pudo guardar: {str(e)[:64]}", icon="⚠️")
+                return False
+            time.sleep(0.8)
     cargar.clear()  # el próximo rerun relee del disco (nunca datos stale)
+    return True
 
 
 def nombre_perfil(datos: dict, perfil_id: str) -> str:
@@ -356,6 +374,69 @@ footer { visibility: hidden; }
   [class*="st-key-ficha_detalle"] [data-testid="stHorizontalBlock"] > [data-testid="column"] {
     min-width: 100% !important; flex: 1 0 100% !important;
   }
+}
+
+/* ============ TEMA PREMIUM (añaditivo, no rompe el layout previo) ============ */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+html, body, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"] {
+  font-family: 'Plus Jakarta Sans', -apple-system, 'Segoe UI', Roboto, sans-serif !important;
+}
+[data-testid="stAppViewContainer"] {
+  background:
+    radial-gradient(1200px 620px at 12% -8%, rgba(63,185,106,0.09), transparent 60%),
+    radial-gradient(1050px 520px at 108% -4%, rgba(126,90,224,0.10), transparent 55%),
+    #0E1116;
+}
+::selection { background: rgba(63,185,106,0.30); color: #fff; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2A313C; border-radius: 8px; border: 2px solid #0E1116; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* Encabezados de sección con acento y peso tipográfico */
+[data-testid="stMarkdown"] h1, [data-testid="stMarkdown"] h2 {
+  font-weight: 800 !important; letter-spacing: -0.01em;
+}
+[data-testid="stMarkdown"] h2 {
+  padding-left: 0.7rem; border-left: 4px solid #3FB96A; color: #EAF6EF;
+}
+
+/* Botones primarios con degradado */
+[data-testid="stButton"] button[kind="primary"],
+[data-testid="stFormSubmitButton"] button[kind="primary"],
+[data-testid="stBaseButton-primary"] {
+  background: linear-gradient(135deg, #2FA45B, #3FB96A) !important;
+  border: none !important;
+}
+
+/* Tarjetas: elevación + transición (solo grids para no saturar formularios) */
+[class*="st-key-grid_catalogo"] [data-testid="stVerticalBlockBorderWrapper"],
+[class*="st-key-grid_por_votar"] [data-testid="stVerticalBlockBorderWrapper"] {
+  background: linear-gradient(180deg, #171C23, #14171D);
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+[class*="st-key-grid_catalogo"] [data-testid="stVerticalBlockBorderWrapper"]:hover,
+[class*="st-key-grid_por_votar"] [data-testid="stVerticalBlockBorderWrapper"]:hover {
+  border-color: rgba(63,185,106,0.45) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.42) !important;
+}
+
+/* Métricas (stats) con tarjeta de vidrio */
+[data-testid="stMetric"] {
+  background: linear-gradient(180deg, #171C23, #14171D);
+  border: 1px solid #262B33 !important; border-radius: 16px;
+  padding: 0.65rem 0.85rem;
+}
+[data-testid="stMetricValue"] { font-weight: 800; color: #EAF6EF; }
+
+/* Pestañas de votación: estado activo resaltado */
+[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] {
+  background: rgba(63,185,106,0.14) !important; color: #A8E6C1 !important;
+}
+
+/* Chips / badges de nota con algo más de presencia */
+[data-testid="stMarkdownContainer"] div[style*="border-radius:999px"] {
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
 }
 </style>""", unsafe_allow_html=True)
 
@@ -853,6 +934,30 @@ def menu_movil(datos: dict):
                     st.session_state["pagina"] = p
                     st.session_state["menu_abierto"] = False
                     st.rerun()
+
+
+def hero(datos: dict, logueado: bool):
+    """Banda de marca compacta arriba del contenido: identidad + estado, sin
+    texto técnico. Da un acabado más cuidado y despeja el aspecto de la app."""
+    n = len(datos.get("catas", []))
+    if core._db_nube() is not None:
+        chip = "<span style='color:#8BE9B0;font-weight:600'>🟢 Conectado</span>"
+    else:
+        chip = "<span style='color:#E8C35A;font-weight:600'>💾 Modo local</span>"
+    if logueado:
+        chip += (f"&nbsp;&nbsp;<span style='color:#8B93A1'>·&nbsp;👤 "
+                 f"{_html.escape(str(st.session_state.get('usuario', '')))}</span>")
+    st.markdown(
+        f'<div style="border-radius:16px;padding:0.75rem 1.05rem;margin:0 0 0.7rem;'
+        f'background:linear-gradient(135deg,rgba(63,185,106,0.16),rgba(126,90,224,0.13));'
+        f'border:1px solid rgba(63,185,106,0.26);">'
+        f'<div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">'
+        f'<span style="font-size:1.3rem;font-weight:800;color:#F2F5F9;'
+        f'letter-spacing:-0.02em;">🌿 TerpsXHunter</span>'
+        f'<span style="font-size:0.8rem;color:#8B93A1;">· {n} cata'
+        f'{"s" if n != 1 else ""}</span>'
+        f'<span style="margin-left:auto;font-size:0.8rem;">{chip}</span></div></div>',
+        unsafe_allow_html=True)
 
 
 def sidebar(datos: dict):
@@ -3655,6 +3760,8 @@ def main():
     if not logueado and pagina not in PAGINAS_LECTURA:
         pantalla_login(datos)
         return
+
+    hero(datos, logueado)
 
     if pagina == "📦 Catálogo":
         seccion_catalogo(datos)
