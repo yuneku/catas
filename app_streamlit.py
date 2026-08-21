@@ -478,14 +478,15 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContain
 }
 
 /* Segunda iteración (visión local): pills con estado claro, sidebar legible,
-   chips con borde y altura uniforme de tarjeta */
-[data-testid="stPills"] button {
+   chips con borde y altura uniforme de tarjeta.
+   Streamlit 1.61: los pills son button[data-variant="pills"] con role=radio y
+   aria-checked (NO existe data-testid=stPills). */
+button[data-variant="pills"] {
   border: 1px solid #3A4350 !important;
   background: #1A2029 !important;
   color: #C9D2DC !important;
 }
-[data-testid="stPills"] button[aria-pressed="true"],
-[data-testid="stPills"] button[aria-checked="true"] {
+button[data-variant="pills"][aria-checked="true"] {
   background: rgba(74,222,128,0.16) !important;
   border-color: #4ADE80 !important;
   color: #D9FBE6 !important;
@@ -497,12 +498,7 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContain
 }
 [class*="st-key-card_"] { min-height: 98px; }
 
-/* Iteración 3: selectbox coherente con los pills + más aire en el grid */
-[data-testid="stSelectbox"] [data-baseweb="select"] > div {
-  background: #1A2029 !important;
-  border: 1px solid #3A4350 !important;
-  border-radius: 10px;
-}
+/* Iteración 3: más aire entre tarjetas del grid */
 [class*="st-key-grid_catalogo"] [data-testid="stHorizontalBlock"],
 [class*="st-key-grid_por_votar"] [data-testid="stHorizontalBlock"] { gap: 0.55rem; }
 </style>""", unsafe_allow_html=True)
