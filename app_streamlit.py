@@ -148,7 +148,9 @@ def perfil_por_nombre(datos: dict, nombre: str):
 def guardar_foto_upload(upload, nombre_base: str) -> tuple:
     """Guarda un archivo subido en ./imagenes/<nombre_base><ext>.
     Devuelve (ruta_relativa, b64): en modo nube (Supabase) el b64 viaja a la
-    BD porque el filesystem de la nube es efímero; en local b64 = ''."""
+    BD porque el filesystem de la nube es efímero; en local b64 = ''.
+    El b64 se OPTIMIZA (max 1200px, JPEG q82) para que las fotos de la BD
+    no engorden el SELECT ni el HTML de las tarjetas."""
     if upload is None:
         return "", ""
     ext = os.path.splitext(upload.name)[1].lower() or ".jpg"
@@ -161,11 +163,38 @@ def guardar_foto_upload(upload, nombre_base: str) -> tuple:
     try:
         import db_supabase as _db
         if _db.activo():
-            with open(destino, "rb") as f:
-                b64 = base64.b64encode(f.read()).decode("ascii")
+            b64 = _optimizar_b64_upload(upload.getbuffer())
     except Exception:
         b64 = ""
     return ruta, b64
+
+
+def _optimizar_b64_upload(datos_bytes: bytes, max_lado: int = 1200,
+                          calidad: int = 82) -> str:
+    """Redimensiona y re-codifica los bytes de una foto subida (JPEG).
+    Devuelve '' si no se puede procesar (subida corrupta)."""
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(datos_bytes))
+        if img.mode == "RGBA":  # fondo oscuro para transparencias
+            fondo = Image.new("RGB", img.size, "#161A20")
+            fondo.paste(img, mask=img.getchannel("A"))
+            img = fondo
+        else:
+            img = img.convert("RGB")
+        w, h = img.size
+        escala = min(1.0, max_lado / max(w, h))
+        if escala < 1.0:
+            img = img.resize((max(1, int(w * escala)),
+                              max(1, int(h * escala))), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=calidad)
+        return base64.b64encode(buf.getvalue()).decode("ascii")
+    except Exception:
+        try:
+            return base64.b64encode(datos_bytes).decode("ascii")
+        except Exception:
+            return ""
 
 
 def inyectar_css():
@@ -311,9 +340,10 @@ footer { visibility: hidden; }
 
 def mostrar_foto(foto: str, width: int = 120, emoji: str = "🌿", b64: str = ""):
     """Muestra la foto si existe; si no, un placeholder discreto.
-    En modo nube, `b64` trae la imagen desde la BD (filesystem efímero)."""
+    En modo nube, `b64` trae la imagen desde la BD (filesystem efímero) y se
+    REDIMENSIONA en cliente (las tarjetas no incrustan la foto original)."""
     if b64:
-        st.markdown(f'<img src="data:image/jpeg;base64,{b64}" '
+        st.markdown(f'<img src="data:image/jpeg;base64,{_foto_b64_redim(b64, max(width * 2, 400))}" '
                     f'style="width:{width}px;border-radius:10px;display:block">',
                     unsafe_allow_html=True)
         return
@@ -366,10 +396,11 @@ def foto_base64(ruta: str, px: int = 76, radius: int = 10, b64: str = "") -> str
     """<img> cuadrada en base64 (recorte central) para HTML custom.
     Devuelve '' si la ruta no existe o no puede leerse. Cacheada por
     (ruta, px, radius, mtime): solo se regenera si el archivo cambia.
-    En modo nube se pasa `b64` (foto guardada en la BD) y se omite el archivo."""
+    En modo nube se pasa `b64` (foto de la BD) y se genera un THUMBNAIL
+    ligero en cliente (px) en vez de incrustar la foto original."""
     if b64:
-        return (f'<img src="data:image/jpeg;base64,{b64}" alt="" '
-                f'style="width:{px}px;height:{px}px;border-radius:{radius}px;'
+        return (f'<img src="data:image/jpeg;base64,{_foto_b64_thumb(b64, px, radius)}" '
+                f'alt="" style="width:{px}px;height:{px}px;border-radius:{radius}px;'
                 f'object-fit:cover;display:block">')
     if not ruta or not os.path.exists(ruta):
         return ""
@@ -381,6 +412,61 @@ def foto_base64(ruta: str, px: int = 76, radius: int = 10, b64: str = "") -> str
         return _foto_base64_cached(ruta, px, radius, mtime)
     except Exception:
         return ""
+
+
+# Memoización de thumbnails b64 (modo nube): (md5, px, radius) -> thumb ligero.
+_THUMBS = {}
+
+
+def _foto_b64_thumb(b64: str, px: int = 84, radius: int = 10) -> str:
+    """Thumbnail cuadrado ligero desde un b64 de la BD (recorte central,
+    JPEG q80). Memoizado por (md5, px, radius): se genera una sola vez."""
+    if not b64:
+        return ""
+    clave = (hashlib.md5(b64.encode("utf-8")).hexdigest(), px, radius)
+    if clave not in _THUMBS:
+        _THUMBS[clave] = _b64_a_jpeg(b64, px, cuadrado=True)
+    return _THUMBS[clave]
+
+
+def _foto_b64_redim(b64: str, max_lado: int = 400) -> str:
+    """Redimensiona un b64 a <= max_lado conservando aspecto (JPEG q80)."""
+    if not b64:
+        return ""
+    clave = (hashlib.md5(b64.encode("utf-8")).hexdigest(), max_lado, 0)
+    if clave not in _THUMBS:
+        _THUMBS[clave] = _b64_a_jpeg(b64, max_lado, cuadrado=False)
+    return _THUMBS[clave]
+
+
+def _b64_a_jpeg(b64: str, px: int, cuadrado: bool) -> str:
+    """Abre un b64, lo recorta (opcional) y lo re-codifica a JPEG ligero.
+    Devuelve el b64 ORIGINAL si PIL falla (nunca rompe el render)."""
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(base64.b64decode(b64)))
+        if img.mode == "RGBA":  # fondo oscuro para transparencias
+            fondo = Image.new("RGB", img.size, "#161A20")
+            fondo.paste(img, mask=img.getchannel("A"))
+            img = fondo
+        else:
+            img = img.convert("RGB")
+        w, h = img.size
+        if cuadrado:
+            lado = min(w, h)
+            img = img.crop(((w - lado) // 2, (h - lado) // 2,
+                            (w + lado) // 2, (h + lado) // 2))
+            img = img.resize((px, px), Image.LANCZOS)
+        else:
+            escala = min(1.0, px / max(w, h))
+            if escala < 1.0:
+                img = img.resize((max(1, int(w * escala)),
+                                  max(1, int(h * escala))), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=80)
+        return base64.b64encode(buf.getvalue()).decode("ascii")
+    except Exception:
+        return b64  # fallback seguro: original
 
 
 @st.cache_data(show_spinner=False)
