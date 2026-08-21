@@ -476,6 +476,26 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContain
 [class*="st-key-grid_por_votar"] [class*="st-key-card_"]:hover {
   border-color: rgba(74,222,128,0.55) !important;
 }
+
+/* Segunda iteración (visión local): pills con estado claro, sidebar legible,
+   chips con borde y altura uniforme de tarjeta */
+[data-testid="stPills"] button {
+  border: 1px solid #3A4350 !important;
+  background: #1A2029 !important;
+  color: #C9D2DC !important;
+}
+[data-testid="stPills"] button[aria-pressed="true"],
+[data-testid="stPills"] button[aria-checked="true"] {
+  background: rgba(74,222,128,0.16) !important;
+  border-color: #4ADE80 !important;
+  color: #D9FBE6 !important;
+}
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p { color: #A5AEB8 !important; }
+[data-testid="stSidebar"] p { color: #C9D2DC !important; }
+[data-testid="stMarkdownContainer"] div[style*="border-radius:999px"] {
+  border: 1px solid rgba(255,255,255,0.14);
+}
+[class*="st-key-card_"] { min-height: 98px; }
 </style>""", unsafe_allow_html=True)
 
 
@@ -1790,7 +1810,7 @@ def tarjeta_por_votar(cata: dict, datos: dict, perfil_id: str):
         '<div style="display:flex;gap:10px;align-items:flex-start;width:100%">'
         '<div style="flex:0 0 auto">' + foto_html + '</div>'
         '<div style="flex:1;min-width:0">'
-        f'<div style="font-weight:700;font-size:14px;color:#F2F5F9;line-height:1.25">{nombre}</div>'
+        f'<div style="font-weight:700;font-size:15px;color:#F2F5F9;line-height:1.25">{nombre}</div>'
         f'<div style="font-size:11.5px;color:#8B93A1;margin-top:1px">{productor}</div>'
         '<div style="margin-top:4px">' + '  '.join(chips_row) + '</div>'
         + badge_html
@@ -1969,7 +1989,7 @@ def tarjeta_catalogo(cata: dict, datos: dict, admin: bool):
         '<div style="display:flex;gap:10px;align-items:flex-start;width:100%">'
         '<div style="flex:0 0 auto">' + foto_html + '</div>'
         '<div style="flex:1;min-width:0">'
-        f'<div style="font-weight:700;font-size:14px;color:#F2F5F9;line-height:1.25">{nombre}</div>'
+        f'<div style="font-weight:700;font-size:15px;color:#F2F5F9;line-height:1.25">{nombre}</div>'
         f'<div style="font-size:11.5px;color:#8B93A1;margin-top:1px">{productor}</div>'
         '<div style="margin-top:4px">' + '  '.join(chips_row) + '</div>'
         '</div>'
