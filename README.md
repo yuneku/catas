@@ -57,6 +57,12 @@ app lee/escribe en Postgres automáticamente (misma interfaz). Sin ella, usa
 - **Fotos**: las imágenes de `imagenes/` viajan con el repo. Las subidas nuevas
   en la nube se guardan como base64 en la propia base de datos (columna
   `foto_b64`), así no dependen del filesystem.
+- **🎯 Por votar**: caducidad visual de 30 días (los productos con más de 30 días
+  desde su alta salen de la lista y se consultan en el Catálogo) y botón
+  "🙈 No lo probé" (tabla `descartes_usuarios`; el producto desaparece de la
+  lista de ese usuario). El formulario de voto usa 4 pestañas (👁️👃👅✨) con la
+  nota en vivo y el botón de guardar siempre visibles. Migración para la BD
+  existente: `sql/por_votar.sql`.
 - **Backups**: en local, `guardar()` hace copia automática en `backups/`
   (rotación 15). En la nube, la base de datos es tu respaldo.
 - **Escritorio**: `app_catas.py` conserva la versión CustomTkinter (3 capas,
@@ -75,4 +81,3 @@ arrancar_web.py(.bat)   Servidor local bindeado a Tailscale
 arrancar_publico.bat    Servidor + túnel Cloudflare + panel
 .streamlit/config.toml  Tema oscuro (portátil)
 ```
-# Fuerza redeploy para recargar secrets

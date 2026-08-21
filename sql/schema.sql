@@ -56,3 +56,16 @@ create table if not exists public.comentarios_usuarios (
 
 create index if not exists idx_votos_cata       on public.votos (cata_id);
 create index if not exists idx_comentarios_cata on public.comentarios_usuarios (cata_id);
+
+-- "No lo probé": un usuario descarta una cata (no la probó en esta ronda).
+-- La caducidad visual (30 días) se calcula sobre catas.fecha (fecha de alta),
+-- así que no necesita columna extra.
+create table if not exists public.descartes_usuarios (
+    id        bigint generated always as identity primary key,
+    cata_id   text not null references public.catas (id) on delete cascade,
+    perfil_id text not null references public.perfiles (id) on delete cascade,
+    fecha     text not null default '',
+    unique (cata_id, perfil_id)
+);
+
+create index if not exists idx_descartes_cata on public.descartes_usuarios (cata_id);

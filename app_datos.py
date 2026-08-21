@@ -166,9 +166,9 @@ def resolver_ruta_foto(foto: str):
 # =============================================================================
 
 def estructura_vacia() -> dict:
-    """Estructura canónica del JSON (v4: paises/ciudades/coffeeshops)."""
+    """Estructura canónica del JSON (v5: paises/ciudades/coffeeshops + descartes)."""
     return {"perfiles": [], "productores": [], "catas": [],
-            "paises": [], "ciudades": [], "coffeeshops": []}
+            "paises": [], "ciudades": [], "coffeeshops": [], "descartes": []}
 
 
 def _db_nube():
@@ -186,12 +186,13 @@ def _normalizar_estructura(datos):
         datos = _migrar_v1(datos)
         _asegurar_productores(datos)
         return datos
-    if isinstance(datos, dict):          # formato v2/v3/v4
+    if isinstance(datos, dict):          # formato v2/v3/v4/v5
         datos.setdefault("perfiles", [])
         datos.setdefault("catas", [])
         datos.setdefault("paises", [])
         datos.setdefault("ciudades", [])
         datos.setdefault("coffeeshops", [])
+        datos.setdefault("descartes", [])
         datos["perfiles"] = [p for p in datos["perfiles"] if isinstance(p, dict)]
         for p in datos["perfiles"]:
             p.setdefault("es_confianza", False)  # rango 'gente de confianza'
@@ -203,6 +204,12 @@ def _normalizar_estructura(datos):
                                 (normalizar_coffeeshop(c)
                                  for c in datos["coffeeshops"])
                                 if c is not None]
+        # Descartes "No lo probé": solo dicts con cata y perfil válidos
+        datos["descartes"] = [d for d in datos["descartes"]
+                              if isinstance(d, dict) and d.get("cata_id")
+                              and d.get("perfil_id")]
+        for d in datos["descartes"]:
+            d.setdefault("fecha", "")
         _asegurar_productores(datos)
         return datos
     return estructura_vacia()
@@ -717,6 +724,80 @@ def eliminar_coffeeshop(datos: dict, cs_id: str) -> bool:
     datos["coffeeshops"] = [c for c in datos.get("coffeeshops", [])
                             if c.get("id") != cs_id]
     return len(datos["coffeeshops"]) < n
+
+
+# =============================================================================
+# 2c. DESCARTES ("No lo probé") + CADUCIDAD VISUAL (30 días)
+# =============================================================================
+
+def _parse_fecha(texto) -> datetime:
+    """Parsea 'YYYY-MM-DD HH:MM' / 'YYYY-MM-DD' / ISO; None si no se puede."""
+    if not texto:
+        return None
+    texto = str(texto).strip()
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(texto[:19], fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def dias_edad(cata: dict):
+    """Días desde el alta de la cata (campo 'fecha' = fecha de creación).
+    None si la fecha no se puede determinar (la cata no caduca nunca)."""
+    dt = _parse_fecha(cata.get("fecha"))
+    if dt is None:
+        return None
+    return (datetime.now() - dt).days
+
+
+def es_reciente(cata: dict, dias: int = 30) -> bool:
+    """True si la cata tiene <= 'dias' de vida (o no se puede determinar)."""
+    edad = dias_edad(cata)
+    return True if edad is None else edad <= dias
+
+
+def descartado_por(datos: dict, cata_id: str, perfil_id: str) -> bool:
+    """¿El perfil descartó esta cata ('No lo probé')?"""
+    if not cata_id or not perfil_id:
+        return False
+    return any(d.get("cata_id") == cata_id and d.get("perfil_id") == perfil_id
+               for d in datos.get("descartes", []))
+
+
+def descartar_cata(datos: dict, cata_id: str, perfil_id: str) -> str:
+    """Marca la cata como 'no probada' por el perfil.
+    Devuelve 'nuevo' (se añadió) o 'ya' (ya estaba descartada)."""
+    if not cata_id or not perfil_id:
+        return "invalido"
+    descartes = datos.setdefault("descartes", [])
+    for d in descartes:
+        if d.get("cata_id") == cata_id and d.get("perfil_id") == perfil_id:
+            return "ya"
+    descartes.append({"cata_id": cata_id, "perfil_id": perfil_id,
+                      "fecha": datetime.now().strftime("%Y-%m-%d %H:%M")})
+    return "nuevo"
+
+
+def quitar_descarte(datos: dict, cata_id: str, perfil_id: str) -> bool:
+    """Elimina el descarte de la cata; True si existía."""
+    descartes = datos.get("descartes", [])
+    resto = [d for d in descartes
+             if not (d.get("cata_id") == cata_id
+                     and d.get("perfil_id") == perfil_id)]
+    if len(resto) == len(descartes):
+        return False
+    datos["descartes"] = resto
+    return True
+
+
+def ids_descartados_por(datos: dict, perfil_id: str) -> set:
+    """IDs de catas descartadas por un perfil."""
+    if not perfil_id:
+        return set()
+    return {d.get("cata_id") for d in datos.get("descartes", [])
+            if d.get("perfil_id") == perfil_id}
 
 # =============================================================================
 # 3. CAPA DE VISTAS (frontend)

@@ -218,9 +218,15 @@ def _leer_desde(conn) -> dict:
         if cs is not None:
             cs["productores"].append(productor_id)
 
+    # ---- Descartes "No lo probé" ----
+    cur.execute("SELECT cata_id, perfil_id, fecha FROM descartes_usuarios")
+    descartes = [dict(zip(["cata_id", "perfil_id", "fecha"], row))
+                 for row in cur.fetchall()]
+
     cur.close()
     return {"perfiles": perfiles, "productores": productores, "catas": catas,
-            "paises": paises, "ciudades": ciudades, "coffeeshops": coffeeshops}
+            "paises": paises, "ciudades": ciudades, "coffeeshops": coffeeshops,
+            "descartes": descartes}
 
 
 # -----------------------------------------------------------------------------
@@ -238,6 +244,7 @@ def guardar_datos(datos: dict) -> None:
         cur.execute("DELETE FROM comentarios_usuarios")
         cur.execute("DELETE FROM votos_coffeeshops")
         cur.execute("DELETE FROM coffeeshop_productores")
+        cur.execute("DELETE FROM descartes_usuarios")
         # Re-sync total de entidades: se borran y reinsertan TODAS, de modo
         # que las eliminadas del dict también desaparezcan de la BD (el
         # upsert por sí solo no borra). Orden: hijos ya borrados arriba.
@@ -367,6 +374,17 @@ def guardar_datos(datos: dict) -> None:
                     "(coffeeshop_id, productor_id) VALUES (%s, %s) "
                     "ON CONFLICT DO NOTHING",
                     (cs["id"], pr_id))
+
+        # ---- Descartes "No lo probé" ----
+        for d in datos.get("descartes", []):
+            if not isinstance(d, dict) or not d.get("cata_id") \
+                    or not d.get("perfil_id"):
+                continue
+            cur.execute(
+                "INSERT INTO descartes_usuarios "
+                "(cata_id, perfil_id, fecha) VALUES (%s, %s, %s) "
+                "ON CONFLICT (cata_id, perfil_id) DO UPDATE SET fecha = EXCLUDED.fecha",
+                (d.get("cata_id"), d.get("perfil_id"), d.get("fecha", "")))
 
         conn.commit()
         cur.close()

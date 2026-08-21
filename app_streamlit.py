@@ -232,17 +232,40 @@ footer { visibility: hidden; }
   [class*="st-key-rk_lista"] [data-testid="column"] { min-width: 0 !important; }
 }
 
-/* ============ GRID DEL CATÁLOGO (tarjetas 3-2-1 columnas) ============ */
-[class*="st-key-grid_catalogo"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: 0.4rem; }
-[class*="st-key-grid_catalogo"] [data-testid="column"] { min-width: 0; }
+/* ============ GRID DEL CATÁLOGO Y POR VOTAR (tarjetas 3-2-1 columnas) ============ */
+[class*="st-key-grid_catalogo"] [data-testid="stHorizontalBlock"],
+[class*="st-key-grid_por_votar"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: 0.4rem; }
+[class*="st-key-grid_catalogo"] [data-testid="column"],
+[class*="st-key-grid_por_votar"] [data-testid="column"] { min-width: 0; }
 @media (min-width: 1100px) {
-  [class*="st-key-grid_catalogo"] [data-testid="column"] { flex: 0 0 calc(33.33% - 0.3rem) !important; }
+  [class*="st-key-grid_catalogo"] [data-testid="column"],
+  [class*="st-key-grid_por_votar"] [data-testid="column"] { flex: 0 0 calc(33.33% - 0.3rem) !important; }
 }
 @media (max-width: 1099px) and (min-width: 769px) {
-  [class*="st-key-grid_catalogo"] [data-testid="column"] { flex: 0 0 calc(50% - 0.3rem) !important; }
+  [class*="st-key-grid_catalogo"] [data-testid="column"],
+  [class*="st-key-grid_por_votar"] [data-testid="column"] { flex: 0 0 calc(50% - 0.3rem) !important; }
 }
 @media (max-width: 768px) {
-  [class*="st-key-grid_catalogo"] [data-testid="column"] { flex: 1 0 100% !important; min-width: 100% !important; }
+  [class*="st-key-grid_catalogo"] [data-testid="column"],
+  [class*="st-key-grid_por_votar"] [data-testid="column"] { flex: 1 0 100% !important; min-width: 100% !important; }
+}
+
+/* ============ PESTAÑAS DE VOTACIÓN TÁCTILES (👁️👃👅✨) ============ */
+[data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 0.3rem; overflow-x: auto; flex-wrap: nowrap; }
+[data-testid="stTabs"] [data-baseweb="tab"] {
+  min-height: 46px; padding: 0 1rem; border-radius: 12px 12px 0 0;
+  font-weight: 600; font-size: 14px; white-space: nowrap;
+}
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] { border-radius: 12px 12px 0 0; }
+
+/* ============ BLOQUE NOTA + GUARDAR (voto): sticky al fondo en móvil ============ */
+.st-key-pv_nota_guardar { position: sticky; bottom: 0.5rem; z-index: 998; }
+@media (max-width: 768px) {
+  .st-key-pv_nota_guardar {
+    background: rgba(14, 17, 22, 0.92); backdrop-filter: blur(6px);
+    padding: 0.4rem 0.5rem; border-radius: 12px;
+    box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.55);
+  }
 }
 
 /* ============ FICHA DE PRODUCTO (2 columnas; colapsa en móvil) ============ */
@@ -415,25 +438,25 @@ def extracto(texto, max_chars: int = 110) -> str:
 
 def render_sliders_blocks(voto_precargar=None, prefijo: str = ""):
     """
-    Renderiza los 4 bloques de sliders con ETIQUETA visible y escala 1-100
-    (enteros). Devuelve las puntuaciones en escala 1-10 (÷10) para mantener
-    intacta la capa de datos (puntuaciones_detalle en 1-10).
-    - Cada bloque va en un desplegable (el primero abierto): sin scroll
-      infinito antes de guardar, y en escritorio los sliders van de 2 en 2.
+    Renderiza los 4 bloques de sliders en PESTAÑAS (👁️ Aspecto / 👃 Aroma /
+    👅 Sabor / ✨ Efectos) con ETIQUETA visible y escala 1-100 (enteros).
+    Devuelve las puntuaciones en escala 1-10 (÷10) para mantener intacta la
+    capa de datos (puntuaciones_detalle en 1-10).
+    - Una pestaña por bloque: elimina el scroll vertical infinito y los
+      clics extra de los expanders anidados (UX móvil más rápida).
+    - La nota del bloque (en vivo) se muestra dentro de cada pestaña.
     - voto_precargar: dict de puntuaciones (1-10) a precargar (×10 al slider).
     - prefijo: identifica el conjunto de sliders sin colisión de keys.
     """
     scores = {}
-    primer_bloque = True
     # Flag de precarga: el pop de las keys solo debe hacerse la PRIMERA vez que
     # se muestra el conjunto (al abrir el editor / cargar la cata). Si se hiciera
     # en cada rerun, los sliders volverían a saltar al valor precargado nada más
     # moverlos (bug: el usuario editaba y se guardaba siempre el valor original).
     flag_pre = f"{prefijo}_precargado"
-    for meta in core.BLOQUES:
-        with st.expander(f"{meta['titulo']} · {int(meta['peso'] * 100)}%",
-                         expanded=primer_bloque):
-            primer_bloque = False
+    tabs = st.tabs(["👁️ Aspecto", "👃 Aroma", "👅 Sabor", "✨ Efectos"])
+    for tab, meta in zip(tabs, core.BLOQUES):
+        with tab:
             scores_bloque = {}
             # Sliders de 2 en 2 (móvil los apila por CSS)
             pares = list(meta["subs"])
@@ -455,7 +478,8 @@ def render_sliders_blocks(voto_precargar=None, prefijo: str = ""):
                             step=1, key=key) / 10.0
             # Nota del bloque (sobre 100), en vivo
             nota10 = core.calcular_nota_bloque(scores_bloque, meta["clave"])
-            st.caption(f"📊 Bloque: **{nota10 * 10:.0f} / 100**")
+            st.caption(f"📊 {meta['titulo']} · {int(meta['peso'] * 100)}% — "
+                       f"**{nota10 * 10:.0f} / 100**")
             scores[meta["clave"]] = scores_bloque
     if voto_precargar is not None:
         st.session_state[flag_pre] = True  # precarga aplicada: no volver a resetear
@@ -1066,52 +1090,198 @@ def guardar_voto(datos, perfil, nombre, productor, pais, tipo, anio, temporada,
 # SECCIÓN 1b — POR VOTAR (pendientes del perfil activo)
 # =============================================================================
 
+# Caducidad visual: los productos con más de DIAS_CADUCIDAD desde su alta
+# (campo 'fecha') salen de "Por votar" y se archivan en el Catálogo.
+DIAS_CADUCIDAD = 30
+
+
+def tarjeta_por_votar(cata: dict, datos: dict, perfil_id: str):
+    """Tarjeta del grid 'Por votar': foto, nombre, productor, chips, días
+    restantes y botones '🗳 Votar' + '🙈 No lo probé' (grid 3-2-1 columnas)."""
+    media = core.nota_media(cata)
+    n_votos = len(core.votos_validos(cata))
+    nombre = _html.escape(str(cata.get("nombre", "—")))
+    productor = _html.escape(str(cata.get("productor", "") or "—"))
+    color_nota = core.color_nota(media / 10)
+
+    foto_html = foto_base64(core.resolver_ruta_foto(cata.get("foto")), px=84,
+                            b64=cata.get("foto_b64", ""))
+    if not foto_html:
+        foto_html = placeholder_imagen(84, "🌿")
+
+    chips_row = [chip(_html.escape(str(cata.get("tipo", "—"))),
+                      core.COLOR_TIPO.get(cata.get("tipo", ""), "#444444"))]
+    if cata.get("pais"):
+        chips_row.append(chip(_html.escape(str(cata["pais"])),
+                              core.COLOR_PAIS.get(cata["pais"], "#444444")))
+    if cata.get("anio"):
+        chips_row.append(chip(f"📅 {cata['anio']}", core.COLOR_ANIO))
+
+    # Badge de caducidad visual: días que quedan para salir de "Por votar"
+    badge_html = ""
+    edad = core.dias_edad(cata)
+    if edad is not None:
+        restantes = DIAS_CADUCIDAD - edad
+        if restantes <= 0:
+            badge_html = ("<div style='font-size:11px;font-weight:700;"
+                          "color:#e05c5c;margin-top:3px'>⏳ caducado</div>")
+        else:
+            color_badge = "#34d17b" if restantes > 7 else (
+                "#e8c35a" if restantes > 3 else "#e05c5c")
+            badge_html = (f"<div style='font-size:11px;font-weight:700;"
+                          f"color:{color_badge};margin-top:3px'>"
+                          f"⏳ {restantes} día{'s' if restantes != 1 else ''}</div>")
+
+    # HTML en UNA SOLA LÍNEA (evita HTML en crudo)
+    html_tarjeta = (
+        '<div style="display:flex;gap:10px;align-items:flex-start;width:100%">'
+        '<div style="flex:0 0 auto">' + foto_html + '</div>'
+        '<div style="flex:1;min-width:0">'
+        f'<div style="font-weight:700;font-size:14px;color:#F2F5F9;line-height:1.25">{nombre}</div>'
+        f'<div style="font-size:11.5px;color:#8B93A1;margin-top:1px">{productor}</div>'
+        '<div style="margin-top:4px">' + '  '.join(chips_row) + '</div>'
+        + badge_html
+        + '</div>'
+        '<div style="flex:0 0 auto;text-align:right;min-width:42px">'
+        f'<div style="font-size:20px;font-weight:800;color:{color_nota};line-height:1.1">{media:.1f}</div>'
+        + f'<div style="font-size:10px;color:#6B7480">{n_votos} voto'
+        + ('s' if n_votos != 1 else '') + '</div>'
+        + '</div></div>'
+    )
+    st.markdown(html_tarjeta, unsafe_allow_html=True)
+
+    # Botones: Votar (CTA) + No lo probé (descarte inmediato con toast)
+    b_votar, b_no = st.columns([2, 1])
+    with b_votar:
+        if st.button("🗳 Votar", type="primary",
+                     key=f"pv_votar_{cata['id']}", use_container_width=True):
+            st.session_state["votar_id"] = cata["id"]
+            st.rerun()
+    with b_no:
+        if st.button("🙈 No lo probé", key=f"pv_no_{cata['id']}",
+                     use_container_width=True):
+            core.descartar_cata(datos, cata["id"], perfil_id)
+            guardar(datos)
+            st.toast(f"🙈 '{cata.get('nombre', '')}' marcado como no probado")
+            st.rerun()
+
+
+def formulario_voto(datos: dict, cata: dict, perfil: dict, perfil_id: str):
+    """Formulario de votación a ancho completo: 4 pestañas de sliders
+    (👁️ 👃 👅 ✨), comentarios, nota en vivo y botón de guardar SIEMPRE
+    visibles debajo de las pestañas (sticky en móvil)."""
+    nombre = str(cata.get("nombre", "—"))
+    st.markdown(f"### 🗳 Votar **{nombre}**")
+    meta_txt = " · ".join(x for x in [
+        str(cata.get("tipo", "")), str(cata.get("productor", "")),
+        str(cata.get("pais", "")),
+        f"📅 {cata['anio']}" if cata.get("anio") else ""] if x)
+    st.caption(f"{meta_txt}  —  votando como **{perfil['nombre']}**")
+    st.caption("Puntúa cada bloque en su pestaña (1-100).")
+
+    prefijo_pv = f"pv_{cata['id']}_"
+    render_sliders_blocks(prefijo=prefijo_pv)  # pestañas, sin expanders
+    coment = st.text_area("Comentarios (opcional)", key=f"pv_coment_{cata['id']}")
+
+    # Nota en vivo + CTA siempre visibles (sticky al fondo en móvil por CSS)
+    _, nota_final10 = core.calcular_notas(obtener_scores_actuales(prefijo_pv))
+    with st.container(key="pv_nota_guardar"):
+        st.metric("💛 Tu nota", f"{nota_final10 * 10:.1f} / 100",
+                  help="En vivo: se actualiza al mover los sliders")
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            if st.button("💾 Guardar mi voto", type="primary",
+                         key=f"pv_guardar_{cata['id']}",
+                         use_container_width=True):
+                scores = obtener_scores_actuales(prefijo_pv)
+                resultado = core.upsert_voto(cata, perfil_id, scores)
+                if coment.strip():
+                    cata["comentarios"] = (cata.get("comentarios", "") +
+                                           "\n\n" + coment.strip()).strip()
+                core.quitar_descarte(datos, cata["id"], perfil_id)
+                guardar(datos)
+                for k in list(st.session_state.keys()):
+                    if k.startswith(prefijo_pv):
+                        del st.session_state[k]
+                st.session_state.pop("votar_id", None)
+                nota = core._flotante(
+                    core.voto_de_perfil(cata, perfil_id).get("nota_final"))
+                st.toast(f"✅ Voto de {perfil['nombre']} "
+                         f"{'ACTUALIZADO' if resultado == 'actualizado' else 'guardado'} — "
+                         f"{nombre} · {nota:.1f}/100")
+                st.rerun()
+        with c2:
+            if st.button("🙈 No lo probé", key=f"pv_no_form_{cata['id']}",
+                         use_container_width=True):
+                core.descartar_cata(datos, cata["id"], perfil_id)
+                guardar(datos)
+                st.session_state.pop("votar_id", None)
+                st.toast(f"🙈 '{nombre}' marcado como no probado")
+                st.rerun()
+
+
 def seccion_por_votar(datos: dict):
     st.markdown("## 🎯 Por votar")
     perfil = perfil_activo(datos)
     if perfil is None:
         st.info("Primero crea o elige tu perfil en el menú lateral (👤 Votando como).")
         return
+    perfil_id = perfil["id"]
 
-    pendientes = [c for c in datos["catas"]
-                  if core.voto_de_perfil(c, perfil["id"]) is None]
+    # ---- Filtros: sin voto + no descartado + reciente (<= 30 días) ----
+    descartados_ids = core.ids_descartados_por(datos, perfil_id)
+    todos_pend = [c for c in datos["catas"]
+                  if core.voto_de_perfil(c, perfil_id) is None]
+    pendientes = [c for c in todos_pend
+                  if c["id"] not in descartados_ids
+                  and core.es_reciente(c, DIAS_CADUCIDAD)]
+    caducados = [c for c in todos_pend
+                 if c["id"] not in descartados_ids
+                 and not core.es_reciente(c, DIAS_CADUCIDAD)]
+    n_descartados = len([c for c in todos_pend if c["id"] in descartados_ids])
 
     st.caption(f"Votando como **{perfil['nombre']}** — {len(pendientes)} producto"
-               f"{'s' if len(pendientes) != 1 else ''} sin tu voto.")
+               f"{'s' if len(pendientes) != 1 else ''} por votar.")
+    if caducados or n_descartados:
+        partes = []
+        if caducados:
+            partes.append(f"⏳ {len(caducados)} con más de {DIAS_CADUCIDAD} días "
+                          f"(disponibles en el Catálogo)")
+        if n_descartados:
+            partes.append(f"🙈 {n_descartados} descartado"
+                          f"{'s' if n_descartados != 1 else ''}")
+        st.caption("Ocultos: " + " · ".join(partes) + ".")
+
+    # ---- Formulario de votación abierto (a ancho completo, sin grid) ----
+    votar_id = st.session_state.get("votar_id")
+    if votar_id:
+        cata = next((c for c in datos["catas"] if c.get("id") == votar_id), None)
+        if cata is not None:
+            st.divider()
+            formulario_voto(datos, cata, perfil, perfil_id)
+            if st.button("← Volver a la lista", key="pv_volver"):
+                st.session_state.pop("votar_id", None)
+                st.rerun()
+            return
+        st.session_state.pop("votar_id", None)  # cata inexistente: limpiar
 
     if not pendientes:
-        if datos["catas"]:
-            st.success("🎉 ¡Ya has votado todos los productos del catálogo!")
+        if todos_pend:
+            st.success("🎉 ¡Ya has votado o descartado todo lo reciente! "
+                       "Busca productos antiguos en el 📦 Catálogo.")
         else:
-            st.info("Todavía no hay productos en el catálogo.")
+            st.success("🎉 ¡Ya has votado todos los productos del catálogo!")
         return
 
-    for cata in pendientes:
-        with st.container(border=True):
-            fila_producto(cata, datos=datos)
-            with st.expander(f"🗳 Votar '{cata.get('nombre', '')}'"):
-                prefijo_pv = f"pv_{cata['id']}_"
-                render_sliders_blocks(prefijo=prefijo_pv)
-                coment = st.text_area("Comentarios (opcional)",
-                                      key=f"pv_coment_{cata['id']}")
-                _, nota_final10 = core.calcular_notas(
-                    obtener_scores_actuales(prefijo_pv))
-                st.markdown(f"### 💛 Tu nota: **{nota_final10 * 10:.1f} / 100**")
-                if st.button("💾 Guardar mi voto", type="primary",
-                             key=f"pv_guardar_{cata['id']}"):
-                    scores = obtener_scores_actuales(prefijo_pv)
-                    resultado = core.upsert_voto(cata, perfil["id"], scores)
-                    if coment.strip():
-                        cata["comentarios"] = (cata.get("comentarios", "") +
-                                               "\n\n" + coment.strip()).strip()
-                    guardar(datos)
-                    for k in list(st.session_state.keys()):
-                        if k.startswith(prefijo_pv):
-                            del st.session_state[k]
-                    st.success(f"✅ Voto de {perfil['nombre']} guardado — "
-                               f"{cata['nombre']} · "
-                               f"{core._flotante(core.voto_de_perfil(cata, perfil['id']).get('nota_final')):.1f}/100")
-                    st.rerun()
+    # ---- Grid responsive 3-2-1 (misma regla CSS que el Catálogo) ----
+    with st.container(key="grid_por_votar"):
+        for i in range(0, len(pendientes), 3):
+            fila = pendientes[i:i + 3]
+            cols = st.columns(3)
+            for col, cata in zip(cols, fila):
+                with col:
+                    with st.container(border=True):
+                        tarjeta_por_votar(cata, datos, perfil_id)
 
 
 # =============================================================================
@@ -1602,7 +1772,8 @@ def ficha_edicion(datos: dict, cata: dict):
         # Editor del voto NUEVO (para el perfil pendiente elegido)
         for p in pendientes:
             if st.session_state.get(f"nv_{cata['id']}_{p['id']}"):
-                with st.expander(f"🗳 Votar como {p['nombre']}", expanded=True):
+                st.markdown(f"**🗳 Votar como {p['nombre']}**")
+                with st.container(border=True):
                     prefijo_nv = f"nv_{cata['id']}_{p['id']}_"
                     render_sliders_blocks(prefijo=prefijo_nv)
                     if st.button("💾 Guardar voto", type="primary",
@@ -2833,6 +3004,7 @@ _STATE_DEFAULTS = {
     "menu_abierto": False,    # panel ☰ móvil
     "ficha_id": None,         # ficha de producto abierta en catálogo
     "prod_ficha": None,       # ficha de productor abierta
+    "votar_id": None,         # formulario de voto abierto en "Por votar"
 }
 
 
