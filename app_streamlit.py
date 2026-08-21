@@ -550,6 +550,28 @@ button[data-variant="pills"][aria-checked="true"] {
 [data-testid="stMarkdownContainer"] div[style*="border-radius:16px"] {
   border: 1px solid rgba(74,222,128,0.34);
 }
+
+/* ---------- 25 · FICHA DE PRODUCTO (presentación) ---------- */
+/* Título y nota del producto destacados a la izquierda; la imagen en tarjeta
+   con altura contenida para que no entierre el título. */
+[class*="st-key-ficha_detalle"] [data-testid="stImage"] img,
+[class*="st-key-ficha_detalle"] img {
+  border-radius: 14px; border: 1px solid #242C37; object-fit: cover;
+  max-height: 320px; width: 100%; display: block;
+}
+/* Cajas de voto: menos "post de foro", más tarjeta pulida */
+[class*="st-key-ficha_detalle"] [data-testid="stVerticalBlockBorderWrapper"] {
+  background: linear-gradient(180deg, #151B24, #131820) !important;
+  border: 1px solid #242C37 !important; border-radius: 14px;
+}
+[class*="st-key-ficha_detalle"] [data-testid="stVerticalBlockBorderWrapper"] h3,
+[class*="st-key-ficha_detalle"] [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMarkdownContainer"] h3 {
+  font-size: 1.2rem; margin: 0;
+}
+[class*="st-key-ficha_detalle"] [data-testid="stVerticalBlockBorderWrapper"]:hover {
+  border-color: rgba(74,222,128,0.45) !important;
+}
+
     </style>""", unsafe_allow_html=True)
 
 
@@ -2281,24 +2303,26 @@ def ficha_premium(datos: dict, cata: dict):
     with st.container(key="ficha_detalle"):
         col_izq, col_der = st.columns([1, 1.5])
 
-        # ================= COLUMNA IZQUIERDA: imagen + info =================
+        # ================= COLUMNA IZQUIERDA: título, puntuación e imagen =================
         with col_izq:
+            # Título del producto PRIMERO (destacado, no enterrado bajo la foto)
+            st.markdown(
+                f'<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
+                f'<div style="font-size:1.5rem;font-weight:800;color:#F2F5F9;'
+                f'letter-spacing:-0.02em;line-height:1.15">{nombre}</div>'
+                f'<div style="font-size:2.4rem;font-weight:800;color:{color_nota};'
+                f'line-height:1;margin-left:auto">{media:.1f}</div></div>',
+                unsafe_allow_html=True)
+            st.markdown(f"🏭 **{productor}**")
+            st.markdown(" ".join(chips_row), unsafe_allow_html=True)
+            st.caption(f"{n_votos} voto{'s' if n_votos != 1 else ''}{prof_txt}")
+
+            # Imagen del producto en tarjeta con altura contenida (no entierra el título)
             ruta_foto = core.resolver_ruta_foto(cata.get("foto"))
             if ruta_foto:
                 st.image(ruta_foto, width="stretch")
             else:
                 st.markdown(placeholder_imagen_fluid("🌿"), unsafe_allow_html=True)
-
-            st.markdown(f"### {nombre}")
-            st.markdown(f"🏭 **{productor}**")
-            st.markdown(" ".join(chips_row), unsafe_allow_html=True)
-
-            # Puntuación general grande + profesional
-            st.markdown(
-                f'<div style="font-size:38px;font-weight:800;color:{color_nota};'
-                f'line-height:1.1;margin-top:6px">{media:.1f}</div>',
-                unsafe_allow_html=True)
-            st.caption(f"{n_votos} voto{'s' if n_votos != 1 else ''}{prof_txt}")
 
             # Descripción en tarjeta (si existe)
             if coment_html:
@@ -2993,6 +3017,12 @@ def _anio_int(cata) -> int:
         return None
 
 
+# Paleta de color para los charts (verne neón + violeta, coherente con el tema).
+# Streamlit NO usa primaryColor en los charts (usa su paleta default azul), así
+# que se pasa color explícito. Coherente con el Design System v3.
+_PALETA_CHART = ["#34D97B", "#7E5AE0", "#22C55E", "#A78BFA", "#4ADE80"]
+
+
 def _df_notas(catas_filtradas) -> pd.DataFrame:
     """DataFrame (anio, temporada, periodo, clave, productor, nota) de catas
     con voto y año válido. 'periodo' = '2025 · S2' si hay temporada, si no '2025';
@@ -3089,7 +3119,7 @@ def seccion_evolucion(datos: dict):
             if _vol:
                 _ser = pd.Series(dict(sorted(_vol.items())))
                 st.caption(f"**Actividad**: {int(_ser.sum())} catas registradas por año")
-                st.bar_chart(_ser, height=170)
+                st.bar_chart(_ser, height=170, color="#34D97B")
                 st.divider()
             sub_df = df[df["productor"].isin(elegidos)]
             if agrupar == "Año":
@@ -3108,7 +3138,7 @@ def seccion_evolucion(datos: dict):
             if piv.empty:
                 st.info("Sin datos para esos productores con los filtros actuales.")
             else:
-                st.line_chart(piv, height=260)
+                st.line_chart(piv, height=260, color=_PALETA_CHART[:max(1, len(piv.columns))])
                 # Catas de los productores elegidos (con mini foto del productor)
                 sub = [c for c in catas_base
                        if str(c.get("productor", "")).strip() in elegidos]
@@ -3151,7 +3181,7 @@ def seccion_evolucion(datos: dict):
                     .head(10))
             rank.columns = ["productor", "nota_media", "n_catas"]
             st.bar_chart(rank.set_index("productor")["nota_media"],
-                         horizontal=True, height=280)
+                         horizontal=True, height=280, color="#34D97B")
             # Ranking en tarjetas con la FOTO del productor (circular)
             with st.container(key="ev_rank_epoca", border=True):
                 st.markdown(f"**Top por nota media** en la época seleccionada:")
