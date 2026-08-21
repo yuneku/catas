@@ -272,3 +272,11 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   pooler Supavisor IGNORA options de libpq → se hace SET en runtime al coger
   cada conexión del pool; sobrevive a los resets del pool). Desplegado en
   1d65481 (Rankings) y eec5ac4 (timeout).
+- **EVOLUCIÓN + theme global (ago 2026)**: (a) listas de catas del gráfico y
+  del ranking por época agrupadas en TARJETAS (container border con gap 0.5rem)
+  y conteo en negrita; (b) .streamlit/config.toml alineado al tema (base dark,
+  primaryColor #4ADE80, backgroundColor #0E1116, secondaryBackgroundColor
+  #171C23, textColor #EAF0F6) para que los CHARTS (line_chart/bar_chart) y
+  widgets nativos usen fondo oscuro coherente (antes renderizaban con el tema
+  claro/default → desentonaban); (c) TTL de cargar() 300->120s (más frescura
+  multi-usuario). Desplegado en b5f1f33. QA AppTest 3/3.
