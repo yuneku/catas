@@ -171,6 +171,44 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   en el servidor, CASE conserva la existente) → **~1.0 s** verificado con datos
   reales y rollback. Semántica idéntica al re-sync total (lo eliminado
   desaparece); NO cambia la estructura de la BD.
+- **POOL DE CONEXIONES (db_supabase, ago 2026)**: ThreadedConnectionPool
+  (1-4) con validación SELECT 1 y reconexión automática. El handshake SSL al
+  pooler se paga una vez → cargar 0.69 s / guardar 0.72 s en pool caliente
+  (verificado con datos reales). `_devolver()` sustituye a conn.close().
+- **SCROLL AL INICIO al cambiar de vista**: en main(), si la clave de vista
+  (pagina, ficha_id, votar_id) cambia, se inyecta un st.html con
+  `scrollTo(0)` (los scripts de st.html SÍ se ejecutan, a diferencia de
+  st.markdown). Solo se inyecta al cambiar de vista, no en cada rerun.
+- **FRAGMENTS GLOBALES (ago 2026)**: aplicado el patrón de recarga parcial a
+  toda la app: `_catalogo_grid` (filtros+grid: cambiar filtro = rerun parcial),
+  `_tarjeta_productor` (renombrar/foto/eliminar parciales), `_tarjeta_perfil`
+  (toggles de rango, contraseña, eliminar, renombrar parciales) y
+  `_votacion_cs` (valorar local parcial). Las acciones de CAMBIO DE VISTA
+  (abrir ficha, volver) siguen reruneando la app. Regla de oro del fragmento
+  con borrado: check de existencia al inicio (`if not any(...): return`).
+  PITFALL verificado: st.dialog SÍ puede llamarse dentro de st.fragment.
+- **IMÁGENES LIGERAS (ago 2026)**: en modo nube las tarjetas incrustaban el
+  b64 ORIGINAL (31 KB medio por tarjeta → grid de 812 KB). Ahora `foto_base64`
+  y `mostrar_foto` generan thumbs en cliente (`_foto_b64_thumb`/`_foto_b64_redim`,
+  memoizados por md5+px, JPEG q80): 3.7 KB por tarjeta (grid 95 KB, -88%).
+  `guardar_foto_upload` optimiza las subidas (max 1200px JPEG q82; RGBA → fondo
+  #161A20). Migración de las 64 fotos existentes a max 600px (backup previo en
+  backups/fotos_originales_*.json; ahorro BD 8% porque ya eran ligeras).
+  PITFALL: fallback seguro a b64 original si PIL falla (nunca rompe el render).
+- **RONDA 4 (ago 2026)**: rebranding a **TerpsXHunter** (page_title, sidebar,
+  pantalla de acceso). "➕ Nueva Cata" ahora visible para ADMIN + GENTE DE
+  CONFIANZA (`es_profesional` en `paginas_para` y en `seccion_nueva_cata`; el
+  usuario normal ni la ve en su menú — el sidebar le redirige al Catálogo).
+  Paginación "⬇️ Mostrar más" en Catálogo y Por votar (arranca en 12 tarjetas;
+  botón en el fragmento → amplía con recarga parcial; claves cat_n / pv_n).
+  Límite de memoria en _THUMBS (600 entradas, se vacía y regenera).
+- **MEJORAS UX (ago 2026)**: (A) expander "🙈 Descartadas (N) — recuperar" en
+  Por votar (botón ↩ por cata, quita el descarte con recarga parcial); (B)
+  selector de orden en Por votar (⭐ Mejor nota / 🆕 Más reciente / 🔤
+  Alfabético; vive en el fragmento → reordenar es recarga parcial); (C) filtro
+  "Mi voto" en el Catálogo (Todos / Sin votar / Ya votado, solo con sesión).
+  PITFALL AppTest: reutilizar un objeto widget entre runs devuelve un objeto
+  stale — refrescar SIEMPRE `next(p for p in at.pills if p.key == ...)`.
 - **NO optimizado a propósito**: `_df_notas` (evolución) sin cachear (args
   enormes → hashing caro); datos en session_state NO (rompe multi-usuario);
   payload de SELECT (foto_b64) sin tocar (el re-sync total lo necesita).
@@ -181,3 +219,56 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
 - **Supabase**: access token en `~/.supabase/access-token` (CLI); login con `--agent no`
 - **Streamlit**: cuenta de GitHub del usuario (login web)
 - No hay API keys en el proyecto; los secrets de BD van solo por Settings de Streamlit
+- **MEJORAS UX 2 (ago 2026)** — sensación de "no se pulsa bien":
+  (A) Tarjetas del Catálogo 100% clicables: el botón 'Abrir' es un overlay
+  invisible (position:absolute; opacity:0) que cubre TODA la tarjeta → tocar
+  foto/nombre/chips abre la ficha sin zona muerta; el 🗑 del admin queda por
+  encima (z-index) y sigue pulsable. (B) Tarjetas 'Por votar': botones
+  apilados a ancho completo (🗳 Votar + 🙈 No lo probé) en vez del [2,1]
+  apretado. (C) Botones min-height 48px. (D) Menú ☰ móvil con botón ✕ para
+  cerrar. (E) Login-check sidebar: el diagnóstico de BD directa se lee UNA vez
+  (flag _diag_supabase) para no alargar cada rerun cuando la caché viene vacía.
+- **REDISEÑO UI + BACKEND (ago 2026)**:
+  UI: tipografía Plus Jakarta Sans, fondo con degradados radiales, scrollbar y
+  selección personalizadas, encabezados de sección con acento (barra verde +
+  peso 800), botones primarios en degradado, tarjetas con elevación/transición
+  al pasar el ratón, métricas (st.metric) en tarjeta de vidrio, pestañas de
+  voto con estado activo resaltado, y banda de marca `hero()` en la parte
+  superior (título + nº de catas + estado 🟢/💾 + usuario) centrada sin texto
+  técnico. BACKEND: `guardar()` ahora reintenta una vez ante errores
+  transitorios de red/pooler, solo invalida la caché en éxito, devuelve bool y
+  muestra un toast de error si no se pudo guardar (antes el fallo pasaba
+  callado). No se tocó la conexión a Supabase ni el login.
+- **FIX CLIQUEO TARJETAS (ago 2026, verificado en navegador real)**: en
+  Streamlit 1.61 NO existe `data-testid="stVerticalBlockBorderWrapper"` (era de
+  versiones viejas), así que el `position:relative` del overlay era un no-op y el
+  botón 'Abrir' (posicionado absolute) se estiraba a TODO el área de contenido
+  (1092x605), interceptando clics. Solución: dar `key="card_<id>"` al contenedor
+  de cada tarjeta (Catálogo y Por votar) para usarlo como ancestro posicionado,
+  y hacer que el <button> del overlay llene la tarjeta (`inset:0;width:100%;
+  height:100%`). Se verificó en navegador real que el clic sobre la tarjeta abre
+  la ficha (falla previa del click_at_xy era por coordenada, no por el mecanismo).
+  LECCIÓN: en Streamlit 1.61 los contenedores con borde son `stVerticalBlock`
+  (con `st-key-*`), NO `stVerticalBlockBorderWrapper`.
+- **BACKEND: guard multi-usuario contra pérdida de datos (ago 2026)**:
+  nueva tabla `meta_estado` (id=1, version, updated_at) creada en Supabase.
+  `cargar_datos()` incluye `_version` en los datos; `guardar_datos()` bloquea
+  (SELECT FOR UPDATE) la fila, y si la versión del cliente difiere de la BD
+  lanza `ErrorVersionAntigua` ANTES de escribir nada (rollback). La app lo
+  captura: toast "🔄 Otro usuario guardó cambios más recientes", limpia caché
+  y recarga (nadie pisa votos ajenos en silencio). El bump de versión va en la
+  MISMA transacción que los datos. Degradación elegante si la tabla no existe.
+  Además: `connect_timeout=15` en el pool (si el pooler no responde, falla en
+  15 s en vez de colgar el rerun). Verificado: re-sync idempotente (35 catas,
+  28 productores, 3 perfiles, 11 votos intactos tras el guardado de prueba).
+- **RANKINGS + backend (ago 2026, revisado con visión local)**: (a) el botón
+  'Ver ficha' de cada fila de ranking (Top General/Personal/Confianza) pasó de
+  colgar a ancho completo DEBAJO de la fila a una 4ª columna compacta integrada
+  ('👁 Ver', min-height 40px) que en móvil apila a ancho completo (CSS
+  rk_lista flex-wrap) — filas más bajas y alineadas; (b) más aire entre filas
+  (gap 0.55rem), captions de productor/votos más legibles (12.5px #A5AEB8);
+  (c) podium: fotos con esquinas redondeadas, 'N votos' 11px más legible,
+  padding interno mayor. (d) Backend: statement_timeout=30s por conexión (el
+  pooler Supavisor IGNORA options de libpq → se hace SET en runtime al coger
+  cada conexión del pool; sobrevive a los resets del pool). Desplegado en
+  1d65481 (Rankings) y eec5ac4 (timeout).
