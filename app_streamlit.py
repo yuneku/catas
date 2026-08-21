@@ -509,6 +509,22 @@ button[data-variant="pills"][aria-checked="true"] {
 /* Iteración 3: más aire entre tarjetas del grid */
 [class*="st-key-grid_catalogo"] [data-testid="stHorizontalBlock"],
 [class*="st-key-grid_por_votar"] [data-testid="stHorizontalBlock"] { gap: 0.55rem; }
+
+/* ============ RANKINGS: filas con aire, captions legibles y botón integrado ============ */
+[class*="st-key-rk_lista"] { gap: 0.55rem; }
+[class*="st-key-rk_lista"] [data-testid="stCaptionContainer"] p {
+  color: #A5AEB8 !important; font-size: 12.5px;
+}
+/* Botón 'Ver' compacto dentro de la fila de ranking */
+[class*="st-key-rk_lista"] [class*="st-key-abrir_rk"] button { min-height: 40px; }
+/* Móvil: la última columna (botón) apila a ancho completo debajo de la fila,
+   sin romper foto|datos|nota */
+@media (max-width: 768px) {
+  [class*="st-key-rk_lista"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; }
+  [class*="st-key-rk_lista"] [data-testid="stHorizontalBlock"] > [data-testid="column"]:last-child {
+    flex: 1 0 100% !important; min-width: 100% !important;
+  }
+}
 </style>""", unsafe_allow_html=True)
 
 
@@ -931,20 +947,20 @@ def podium_epico(lista, nota_fn=None):
     html_podio = f"""
     <style>
     .pod-row {{ display:flex; gap:10px; width:100%; margin:6px 0 2px; }}
-    .pod-card {{ flex:1; min-width:0; border-radius:16px; padding:12px 8px 10px; text-align:center;
+    .pod-card {{ flex:1; min-width:0; border-radius:16px; padding:14px 10px 12px; text-align:center;
       background:linear-gradient(180deg,#1B2129 0%,#161A20 100%); position:relative; }}
     .pod-1 {{ border:2px solid #FFD700; box-shadow:0 0 20px rgba(255,215,0,.32), inset 0 0 14px rgba(255,215,0,.07); }}
     .pod-2 {{ border:2px solid #C0C0C0; box-shadow:0 0 16px rgba(192,192,192,.22), inset 0 0 10px rgba(192,192,192,.05); }}
     .pod-3 {{ border:2px solid #CD7F32; box-shadow:0 0 16px rgba(205,127,50,.22), inset 0 0 10px rgba(205,127,50,.05); }}
     .pod-foto {{ width:100%; margin-bottom:8px; }}
-    .pod-foto img {{ display:block; }}
+    .pod-foto img {{ display:block; border-radius:10px; }}
     .pod-medal {{ font-size:30px; line-height:1; }}
     .pod-name {{ font-weight:700; font-size:13px; color:#F2F5F9; margin-top:6px; line-height:1.25;
       display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }}
     .pod-prod {{ font-size:11px; color:#8B93A1; margin-top:2px; white-space:nowrap;
       overflow:hidden; text-overflow:ellipsis; }}
     .pod-nota {{ font-size:21px; font-weight:800; margin-top:6px; line-height:1; }}
-    .pod-votos {{ font-size:10px; color:#6B7480; margin-top:3px; }}
+    .pod-votos {{ font-size:11px; color:#8B93A1; margin-top:3px; }}
     /* ===== MÓVIL: las 3 tarjetas colapsan a UNA COLUMNA (fotos sin aplastarse) ===== */
     @media (max-width:768px) {{
       .pod-row {{ flex-direction:column; align-items:stretch; gap:10px; }}
@@ -2765,8 +2781,8 @@ def fila_ranking(cata: dict, pos: int = None, datos: dict = None,
         chips_row.append(chip(f"📅 {cata['anio']}", core.COLOR_ANIO))
 
     with st.container(border=True):
-        c_foto, c_info, c_nota = st.columns([1, 4, 1],
-                                            vertical_alignment="center")
+        c_foto, c_info, c_nota, c_ver = st.columns([1, 4, 1, 1],
+                                                   vertical_alignment="center")
         with c_foto:
             ruta_foto = core.resolver_ruta_foto(cata.get("foto"))
             if ruta_foto:
@@ -2787,13 +2803,16 @@ def fila_ranking(cata: dict, pos: int = None, datos: dict = None,
                 unsafe_allow_html=True)
             if etiqueta_nota:
                 st.caption(etiqueta_nota)
-        # Enrutamiento cruzado: Rankings -> Detalle del Catálogo
-        if st.button("📂 Ver ficha", key=f"abrir_{prefijo_key}_{cata['id']}",
-                     width="stretch"):
-            st.session_state["producto_seleccionado"] = cata["id"]
-            st.session_state["ficha_id"] = cata["id"]
-            st.session_state["pagina"] = "📦 Catálogo"
-            st.rerun()
+        with c_ver:
+            # Enrutamiento cruzado: Rankings -> Detalle del Catálogo.
+            # Botón compacto integrado en la fila; en móvil apila a ancho
+            # completo (CSS rk_lista) y no cuelga desbalanceado.
+            if st.button("👁 Ver", key=f"abrir_{prefijo_key}_{cata['id']}",
+                         width="stretch", help="Ver ficha"):
+                st.session_state["producto_seleccionado"] = cata["id"]
+                st.session_state["ficha_id"] = cata["id"]
+                st.session_state["pagina"] = "📦 Catálogo"
+                st.rerun()
 
 
 def seccion_rankings(datos: dict):
@@ -2877,8 +2896,8 @@ def seccion_rankings(datos: dict):
         with st.container(key="rk_lista_personal"):
             for pos, (cata, nota, sabor, media) in enumerate(items, start=1):
                 with st.container(border=True):
-                    c_foto, c_info, c_nota = st.columns([1, 4, 1],
-                                                        vertical_alignment="center")
+                    c_foto, c_info, c_nota, c_ver = st.columns([1, 4, 1, 1],
+                                                               vertical_alignment="center")
                     with c_foto:
                         ruta_foto = core.resolver_ruta_foto(cata.get("foto"))
                         if ruta_foto:
@@ -2900,13 +2919,14 @@ def seccion_rankings(datos: dict):
                             f'color:{color_nota};line-height:1.1">Tu nota: '
                             f'{nota:.1f}</div>',
                             unsafe_allow_html=True)
-                    # Enrutamiento cruzado: Top Personal -> Detalle del Catálogo
-                    if st.button("📂 Ver ficha", key=f"abrir_rkp_{cata['id']}",
-                                 width="stretch"):
-                        st.session_state["producto_seleccionado"] = cata["id"]
-                        st.session_state["ficha_id"] = cata["id"]
-                        st.session_state["pagina"] = "📦 Catálogo"
-                        st.rerun()
+                    with c_ver:
+                        # Enrutamiento cruzado: Top Personal -> Catálogo
+                        if st.button("👁 Ver", key=f"abrir_rkp_{cata['id']}",
+                                     width="stretch", help="Ver ficha"):
+                            st.session_state["producto_seleccionado"] = cata["id"]
+                            st.session_state["ficha_id"] = cata["id"]
+                            st.session_state["pagina"] = "📦 Catálogo"
+                            st.rerun()
 
     # ---------------- Top Confianza (valoración profesional) ----------------
     with tab_confianza:
