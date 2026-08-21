@@ -241,6 +241,15 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContain
   font-family: 'Plus Jakarta Sans', -apple-system, 'Segoe UI', Roboto, sans-serif !important;
   color: #E7EDF4;
 }
+/* Aplicar Plus Jakarta a los encabezados y markdown (Streamlit usaba Source Sans) */
+[data-testid="stMarkdown"] h1, [data-testid="stMarkdown"] h2, [data-testid="stMarkdown"] h3,
+[data-testid="stMarkdown"] p, [data-testid="stMarkdownContainer"] *,
+[data-testid="stMarkdownContainer"] h1, [data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3, [data-testid="stMarkdownContainer"] p,
+[data-testid="stCaptionContainer"] p, [data-testid="stText"],
+button, input, textarea, select, label {
+  font-family: 'Plus Jakarta Sans', -apple-system, 'Segoe UI', Roboto, sans-serif !important;
+}
 
 /* Fondo: profundidad con 2 glows (verde + violeta) sobre oscuro casi negro */
 [data-testid="stAppViewContainer"] {
