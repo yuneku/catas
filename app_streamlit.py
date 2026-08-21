@@ -529,6 +529,74 @@ button[data-variant="pills"][aria-checked="true"] {
 /* ============ EVOLUCIÓN: listas agrupadas en tarjeta con gap compacto ============ */
 [class*="st-key-ev_catas_lista"] [data-testid="stVerticalBlock"],
 [class*="st-key-ev_rank_epoca"] [data-testid="stVerticalBlock"] { gap: 0.5rem; }
+
+/* ===================== DESIGN SYSTEM v2 — acabado profesional ===================== */
+/* Se mantienen los tonos oscuros + verde neón; se refina jerarquía, espaciado y
+   micro-interacciones para que NO parezca una web antigua. Solo capa de vista. */
+
+/* --- Fondo con más profundidad (degradado + viñeta sutil) --- */
+[data-testid="stAppViewContainer"] {
+  background:
+    radial-gradient(1300px 700px at 10% -10%, rgba(52,217,123,0.10), transparent 55%),
+    radial-gradient(1100px 600px at 110% -6%, rgba(126,90,224,0.10), transparent 52%),
+    radial-gradient(900px 500px at 50% 120%, rgba(52,217,123,0.05), transparent 60%),
+    #0A0E14;
+}
+
+/* --- Sidebar: degradado vertical y navegación en filas limpias --- */
+[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #10151D 0%, #0B1017 100%) !important;
+  border-right: 1px solid #1B232D !important;
+}
+[data-testid="stSidebar"] label[data-testid="stRadioOption"] {
+  border-radius: 10px; padding: 0.5rem 0.6rem; margin: 1px 0;
+  transition: background .15s ease, color .15s ease;
+}
+[data-testid="stSidebar"] label[data-testid="stRadioOption"]:hover { background: #151C26; }
+[data-testid="stSidebar"] label[data-testid="stRadioOption"]:has(input:checked) {
+  background: rgba(52,217,123,0.14) !important; color: #CFF5DE !important;
+  box-shadow: inset 0 0 0 1px rgba(52,217,123,0.28);
+}
+
+/* --- Cabeceras de sección: acento y peso --- */
+[data-testid="stMarkdown"] h2 { letter-spacing: -0.02em; }
+
+/* --- Botones: micro-transición (sin cambios de layout) --- */
+[data-testid="stButton"] button, [data-testid="stFormSubmitButton"] button { transition: transform .12s ease, box-shadow .12s ease, filter .12s ease; }
+[data-testid="stButton"] button:hover, [data-testid="stFormSubmitButton"] button:hover { transform: translateY(-1px); filter: brightness(1.05); }
+
+/* --- Inputs y textareas: focus ring verde --- */
+[data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea { transition: border-color .15s ease, box-shadow .15s ease; }
+[data-testid="stTextInput"] input:focus, [data-testid="stTextArea"] textarea:focus {
+  border-color: rgba(52,217,123,0.6) !important;
+  box-shadow: 0 0 0 3px rgba(52,217,123,0.14) !important; outline: none;
+}
+
+/* --- Tabs: subrayado verde limpio + hover --- */
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] { background: #34D97B; }
+[data-testid="stTabs"] [data-baseweb="tab"] { transition: background .15s ease; }
+[data-testid="stTabs"] [data-baseweb="tab"]:hover { background: rgba(255,255,255,0.04); }
+[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] { color: #CFF5DE !important; }
+
+/* --- Pills: estado activo con más presencia --- */
+button[data-variant="pills"] { transition: background .15s ease, border-color .15s ease; }
+button[data-variant="pills"][aria-checked="true"] {
+  background: rgba(52,217,123,0.18) !important; border-color: #34D97B !important;
+}
+
+/* --- Expanders: cabecera más limpia y hover --- */
+[data-testid="stExpander"] summary { transition: background .15s ease; }
+[data-testid="stExpander"] summary:hover { background: rgba(255,255,255,0.03); }
+
+/* --- Avisos (info/éxito/error) en tarjeta suave --- */
+[data-testid="stAlert"] {
+  border-radius: 14px; border: 1px solid #232C37 !important;
+  background: linear-gradient(180deg, #141A23, #121720) !important;
+}
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"] { color: #C9D4E0; }
+
+/* --- Métricas: tarjeta de vidrio (refinado) --- */
+[data-testid="stMetric"] { box-shadow: 0 2px 12px rgba(0,0,0,0.2); }
 </style>""", unsafe_allow_html=True)
 
 
@@ -3057,6 +3125,19 @@ def seccion_evolucion(datos: dict):
         if not elegidos:
             st.info("Elige al menos un productor.")
         else:
+            # ---- Actividad: catas registradas por año (TODAS, con o sin voto).
+            #      Da contexto y evita que la sección parezca vacía si aún hay
+            #      pocas catas con nota. ----
+            _vol = {}
+            for c in catas_base:
+                a = _anio_int(c)
+                if a is not None:
+                    _vol[a] = _vol.get(a, 0) + 1
+            if _vol:
+                _ser = pd.Series(dict(sorted(_vol.items())))
+                st.caption(f"**Actividad**: {int(_ser.sum())} catas registradas por año")
+                st.bar_chart(_ser, height=170)
+                st.divider()
             sub_df = df[df["productor"].isin(elegidos)]
             if agrupar == "Año":
                 piv = (sub_df.pivot_table(index="anio", columns="productor",
