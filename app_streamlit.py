@@ -1518,6 +1518,19 @@ def lista_por_votar(datos: dict, perfil: dict, perfil_id: str):
             st.success("🎉 ¡Ya has votado todos los productos del catálogo!")
         return
 
+    # ---- Orden de la lista (recarga parcial: el selectbox vive en el fragmento)
+    orden = st.selectbox("Ordenar por", ["⭐ Mejor nota primero",
+                                         "🆕 Más reciente", "🔤 Alfabético"],
+                         key="pv_orden")
+    if orden == "⭐ Mejor nota primero":
+        pendientes.sort(key=lambda c: (-core.nota_media(c),
+                                       str(c.get("nombre", "")).lower()))
+    elif orden == "🆕 Más reciente":
+        pendientes.sort(key=lambda c: (core.dias_edad(c) or 0,
+                                       str(c.get("nombre", "")).lower()))
+    else:
+        pendientes.sort(key=lambda c: str(c.get("nombre", "")).lower())
+
     # Paginación: arranca en 12 tarjetas; 'Mostrar más' amplía (fragmento)
     n_max = st.session_state.get("pv_n", 12)
     mostrar = pendientes[:n_max]
@@ -1535,6 +1548,25 @@ def lista_por_votar(datos: dict, perfil: dict, perfil_id: str):
         if st.button(f"⬇️ Mostrar más ({len(pendientes) - n_max} restantes)",
                      key="pv_mas", use_container_width=True):
             st.session_state["pv_n"] = n_max + 12
+
+    # ---- Descartados: recuperar si fue accidental (recarga parcial) ----
+    descartadas = [c for c in todos_pend if c["id"] in descartados_ids]
+    if descartadas:
+        with st.expander(f"🙈 Descartadas ({len(descartadas)}) — recuperar"):
+            for c in descartadas:
+                c1, c2 = st.columns([3, 1])
+                with c1:
+                    st.markdown(f"**{_html.escape(str(c.get('nombre', '—')))}**")
+                with c2:
+                    if st.button("↩ Recuperar", key=f"pv_undo_{c['id']}",
+                                 use_container_width=True):
+                        core.quitar_descarte(datos, c["id"], perfil_id)
+                        guardar(datos)
+                        st.toast(f"↩ '{c.get('nombre', '')}' de vuelta en tu lista")
+                        try:
+                            st.rerun(scope="fragment")
+                        except Exception:
+                            pass
 
 
 def tarjeta_por_votar(cata: dict, datos: dict, perfil_id: str):
@@ -1831,6 +1863,12 @@ def _catalogo_grid(datos: dict, admin: bool):
                                default="Todos")
     filtro_anio = st.selectbox("Año", ["Todos"] + core.anios_produccion(),
                                key="cat_anio")
+    perfil = perfil_activo(datos)
+    filtro_voto = "Todos"
+    if perfil is not None:
+        filtro_voto = st.pills("Mi voto", ["Todos", "Sin votar", "Ya votado"],
+                               key="cat_voto", selection_mode="single",
+                               default="Todos")
 
     lista = []
     for c in datos["catas"]:
@@ -1843,6 +1881,12 @@ def _catalogo_grid(datos: dict, admin: bool):
         if texto and texto.lower() not in (c.get("nombre", "") + " " +
                                            c.get("productor", "")).lower():
             continue
+        if perfil is not None and filtro_voto != "Todos":
+            tiene_voto = core.voto_de_perfil(c, perfil["id"]) is not None
+            if filtro_voto == "Sin votar" and tiene_voto:
+                continue
+            if filtro_voto == "Ya votado" and not tiene_voto:
+                continue
         lista.append(c)
     lista.sort(key=lambda c: (-core.nota_media(c), str(c.get("nombre", "")).lower()))
 
