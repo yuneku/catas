@@ -228,143 +228,289 @@ def inyectar_css():
     sliders táctiles y apilado automático de columnas en pantallas pequeñas.
     Solo afecta a la capa de vistas; la lógica de datos no se toca."""
     st.markdown("""<style>
-/* ============ FONDO OSCURO BASE ============ */
-html, body, [data-testid="stAppViewContainer"] { background: #0E1116; }
+/* ════════════════════════════════════════════════════════════════
+   TERPSXHUNTER · DESIGN SYSTEM v3
+   Un único lenguaje visual: oscuro profundo + verde neón #4ADE80.
+   Aplica a TODAS las secciones. Solo capa de vista; no toca lógica.
+   ════════════════════════════════════════════════════════════════ */
 
-/* ============ MÓVIL (360-480px): compactar y apilar ============ */
-@media (max-width: 480px) {
-  [data-testid="stMainBlockContainer"] { padding: 0.4rem 0.75rem 3.5rem; max-width: 100%; }
-  [data-testid="stHeader"] { background: transparent; }
-  /* Apilar filas de columnas que contienen sliders, desplegables o pills */
-  [data-testid="stHorizontalBlock"]:has([data-testid="stSlider"]),
-  [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]),
-  [data-testid="stHorizontalBlock"]:has([data-testid="stPills"]) { flex-wrap: wrap; gap: 0.25rem; }
-  [data-testid="stHorizontalBlock"]:has([data-testid="stSlider"]) > [data-testid="column"],
-  [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"],
-  [data-testid="stHorizontalBlock"]:has([data-testid="stPills"]) > [data-testid="column"] { min-width: 100% !important; }
+/* ---------- 1 · FUENTE Y BASE ---------- */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+html, body, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"] {
+  font-family: 'Plus Jakarta Sans', -apple-system, 'Segoe UI', Roboto, sans-serif !important;
+  color: #E7EDF4;
 }
 
-/* ============ TARJETAS OSCURAS ============ */
-[data-testid="stVerticalBlockBorderWrapper"] {
-  background: #161A20; border: 1px solid #262B33; border-radius: 14px;
-  padding: 0.1rem 0.3rem;
+/* Fondo: profundidad con 2 glows (verde + violeta) sobre oscuro casi negro */
+[data-testid="stAppViewContainer"] {
+  background:
+    radial-gradient(1250px 680px at 12% -10%, rgba(74,222,128,0.10), transparent 55%),
+    radial-gradient(1050px 580px at 108% -6%, rgba(126,90,224,0.10), transparent 52%),
+    linear-gradient(180deg, #0B0F15 0%, #0A0E14 100%);
 }
 
-/* ============ BOTONES ERGONÓMICOS (44-48px) ============ */
+[data-testid="stAppViewContainer"] > .main { background: transparent; }
+
+/* Selección y scrollbar */
+::selection { background: rgba(74,222,128,0.32); color: #fff; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2A313C; border-radius: 8px; border: 2px solid #0A0E14; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* Footer de Streamlit oculto */
+footer { visibility: hidden; }
+
+/* ---------- 2 · SIDEBAR ---------- */
+[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #0F141C 0%, #0A0E14 100%) !important;
+  border-right: 1px solid #1B232D !important;
+}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h1,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2,
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h3 {
+  color: #F2F5F9; letter-spacing: -0.02em; font-weight: 800;
+}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p { color: #A5AEB8; }
+[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p strong { color: #C9D2DC; }
+
+/* Navegación (radio) en filas limpias con hover + activo */
+[data-testid="stSidebar"] label[data-testid="stRadioOption"] {
+  border-radius: 10px; padding: 0.5rem 0.65rem; margin: 2px 0;
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+  font-weight: 500;
+}
+[data-testid="stSidebar"] label[data-testid="stRadioOption"]:hover { background: #141A24; }
+[data-testid="stSidebar"] label[data-testid="stRadioOption"]:has(input:checked) {
+  background: rgba(74,222,128,0.13) !important;
+  color: #CFF5DE !important;
+  box-shadow: inset 0 0 0 1px rgba(74,222,128,0.30);
+  font-weight: 700;
+}
+[data-testid="stSidebar"] [role="radiogroup"] { gap: 2px; }
+
+/* ---------- 3 · ENCABEZADOS DE SECCIÓN ---------- */
+[data-testid="stMarkdown"] h1, [data-testid="stMarkdown"] h2 {
+  font-weight: 800 !important; letter-spacing: -0.02em; color: #F1F5F9;
+}
+[data-testid="stMarkdown"] h1 { font-size: 1.62rem; }
+[data-testid="stMarkdown"] h2 {
+  font-size: 1.42rem;
+  padding-left: 0.72rem; border-left: 4px solid #4ADE80;
+}
+[data-testid="stMarkdown"] h3 { font-weight: 700; color: #E7EDF4; letter-spacing: -0.01em; }
+
+/* ---------- 4 · BOTONES ---------- */
 [data-testid="stButton"] button, [data-testid="stFormSubmitButton"] button {
-  min-height: 48px; border-radius: 10px; font-weight: 600; font-size: 15px;
+  min-height: 46px; border-radius: 10px; font-weight: 600; font-size: 15px;
+  transition: transform .12s ease, box-shadow .12s ease, filter .12s ease, border-color .12s ease;
 }
+[data-testid="stButton"] button:hover, [data-testid="stFormSubmitButton"] button:hover {
+  transform: translateY(-1px); filter: brightness(1.05);
+}
+/* Primario: degradado verde neón */
 [data-testid="stButton"] button[kind="primary"],
 [data-testid="stFormSubmitButton"] button[kind="primary"],
-[data-testid="stBaseButton-primary"] { box-shadow: 0 2px 12px rgba(63,185,106,.28); }
-/* CTA del formulario de cata: fijo al fondo en móvil */
-.st-key-btn_guardar_voto { position: sticky; bottom: 0.5rem; z-index: 999; }
-.st-key-btn_guardar_voto button { box-shadow: 0 -6px 18px rgba(0,0,0,.55); }
+[data-testid="stBaseButton-primary"] {
+  background: linear-gradient(135deg, #16A34A, #4ADE80) !important;
+  border: none !important; color: #06140B !important;
+  box-shadow: 0 4px 18px rgba(34,197,94,0.28);
+}
+[data-testid="stButton"] button[kind="primary"]:hover,
+[data-testid="stFormSubmitButton"] button[kind="primary"]:hover { box-shadow: 0 6px 24px rgba(34,197,94,0.4); }
 
-/* ============ SLIDERS TÁCTILES ============ */
+/* ---------- 5 · INPUTS CON FOCUS RING VERDE ---------- */
+[data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea,
+[data-testid="stNumberInput"] input {
+  background: #171D27 !important;
+  border: 1px solid #333D4B !important; color: #EAF0F6 !important;
+  border-radius: 10px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+[data-testid="stTextInput"] input::placeholder, [data-testid="stTextArea"] textarea::placeholder { color: #8B93A1; }
+[data-testid="stTextInput"] input:focus, [data-testid="stTextArea"] textarea:focus {
+  border-color: rgba(74,222,128,0.65) !important;
+  box-shadow: 0 0 0 3px rgba(74,222,128,0.15) !important; outline: none;
+}
+
+/* Desplegables (selectbox) */
+[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+  min-height: 44px; background: #171D27 !important; border-color: #333D4B !important;
+  border-radius: 10px; color: #EAF0F6 !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"] svg { fill: #C9D2DC; }
+
+/* ---------- 6 · SLIDERS TÁCTILES ---------- */
 [data-testid="stSlider"] [role="slider"] { width: 24px !important; height: 24px !important; margin-top: -12px !important; }
 [data-testid="stSlider"] [data-baseweb="slider"] > div > div { height: 6px; }
 
-/* ============ DESPLEGABLES MÁS ALTOS ============ */
-[data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height: 44px; }
-
-/* ============ NAVEGACIÓN / RADIO TÁCTIL ============ */
+/* ---------- 7 · RADIO TÁCTIL (fuera del sidebar, p. ej. filtros) ---------- */
 [data-testid="stRadio"] label { padding: 0.55rem 0.4rem; font-size: 15px; border-radius: 8px; }
-[data-testid="stRadio"] label:hover { background: #1B2129; }
+[data-testid="stRadio"] label:hover { background: #161C26; }
 
-/* ============ PILLS (filtros táctiles) ============ */
+/* ---------- 8 · PILLS (filtros táctiles) ---------- */
+button[data-variant="pills"] {
+  min-height: 36px; border-radius: 18px; font-size: 13px; padding: 0 14px;
+  border: 1px solid #333D4B !important; background: #171D27 !important;
+  color: #C9D2DC !important;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+button[data-variant="pills"]:hover { border-color: rgba(74,222,128,0.5) !important; }
+button[data-variant="pills"][aria-checked="true"] {
+  background: rgba(74,222,128,0.16) !important; border-color: #4ADE80 !important;
+  color: #D9FBE6 !important; font-weight: 700;
+}
 [data-testid="stPills"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; }
-[data-testid="stPills"] button { min-height: 36px; border-radius: 18px; font-size: 13px; padding: 0 14px; }
 
-/* ============ EXPANDERS COMPACTOS ============ */
-[data-testid="stExpander"] details { border-radius: 12px; background: #14181F; border: 1px solid #262B33; }
-[data-testid="stExpander"] summary { min-height: 46px; display: flex; align-items: center; }
+/* ---------- 9 · PESTAÑAS (tabs) con subrayado verde ---------- */
+[data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 0.3rem; overflow-x: auto; flex-wrap: nowrap; }
+[data-testid="stTabs"] [data-baseweb="tab"] {
+  min-height: 46px; padding: 0 1rem; border-radius: 12px 12px 0 0;
+  font-weight: 600; font-size: 14px; white-space: nowrap;
+  transition: background .15s ease;
+}
+[data-testid="stTabs"] [data-baseweb="tab"]:hover { background: rgba(255,255,255,0.04); }
+[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] { color: #CFF5DE !important; }
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] { background: #4ADE80; border-radius: 12px 12px 0 0; }
 
-/* ============ CHIPS: permitir salto de línea en móvil ============ */
+/* ---------- 10 · EXPANDERS ---------- */
+[data-testid="stExpander"] details {
+  border-radius: 12px; background: #141920; border: 1px solid #242C37;
+}
+[data-testid="stExpander"] summary { min-height: 46px; display: flex; align-items: center; transition: background .15s ease; }
+[data-testid="stExpander"] summary:hover { background: rgba(255,255,255,0.03); }
+
+/* ---------- 11 · AVISOS (info/éxito/error) en tarjeta suave ---------- */
+[data-testid="stAlert"] {
+  border-radius: 14px; border: 1px solid #232C37 !important;
+  background: linear-gradient(180deg, #141A23, #121720) !important;
+}
+[data-testid="stAlert"] [data-testid="stMarkdownContainer"] { color: #C9D4E0; }
+
+/* ---------- 12 · MÉTRICAS en tarjeta de vidrio ---------- */
+[data-testid="stMetric"] {
+  background: linear-gradient(180deg, #171D27, #141920);
+  border: 1px solid #242C37 !important; border-radius: 16px;
+  padding: 0.65rem 0.85rem; box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+}
+[data-testid="stMetricValue"] { font-weight: 800; color: #EAF0F6; }
+
+/* ---------- 13 · CHIPS / BADGES con borde y aire ---------- */
+[data-testid="stMarkdownContainer"] div[style*="border-radius:999px"] {
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.14);
+  display: inline-block; margin: 2px 5px 2px 0;
+}
 [data-testid="stMarkdownContainer"] p { overflow-wrap: anywhere; }
 
-/* ============ OCULTAR FOOTER DE STREAMLIT ============ */
-footer { visibility: hidden; }
-
-/* ============ BOTÓN ☰ MENÚ: solo en móvil ============ */
+/* ---------- 14 · BOTÓN ☰ MENÚ (solo móvil) ---------- */
 .st-key-btn_menu { display: none; }
 @media (max-width: 769px) {
   .st-key-btn_menu { display: block; }
   .st-key-btn_menu button { font-size: 16px; min-height: 44px; }
 }
 
-/* ============ LISTA DE RANKING (filas foto|datos|nota) ============ */
-[class*="st-key-rk_lista"] [data-testid="stVerticalBlockBorderWrapper"] { padding: 0.45rem 0.6rem; }
-[class*="st-key-rk_lista"] [data-testid="column"] img { border-radius: 8px; }
-[class*="st-key-rk_lista"] [data-testid="column"]:last-child { text-align: right; }
-@media (max-width: 768px) {
-  [class*="st-key-rk_lista"] [data-testid="stVerticalBlockBorderWrapper"] { padding: 0.3rem 0.45rem; }
-  [class*="st-key-rk_lista"] p { font-size: 13px !important; line-height: 1.3; }
-  [class*="st-key-rk_lista"] [data-testid="column"] { min-width: 0 !important; }
-}
-
-/* ============ GRID DEL CATÁLOGO Y POR VOTAR (tarjetas 3-2-1 columnas) ============ */
+/* ---------- 15 · GRID CATÁLOGO / POR VOTAR (3-2-1 columnas) ---------- */
 [class*="st-key-grid_catalogo"] [data-testid="stHorizontalBlock"],
-[class*="st-key-grid_por_votar"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: 0.4rem; }
+[class*="st-key-grid_por_votar"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: 0.6rem; }
 [class*="st-key-grid_catalogo"] [data-testid="column"],
 [class*="st-key-grid_por_votar"] [data-testid="column"] { min-width: 0; }
 @media (min-width: 1100px) {
   [class*="st-key-grid_catalogo"] [data-testid="column"],
-  [class*="st-key-grid_por_votar"] [data-testid="column"] { flex: 0 0 calc(33.33% - 0.3rem) !important; }
+  [class*="st-key-grid_por_votar"] [data-testid="column"] { flex: 0 0 calc(33.33% - 0.4rem) !important; }
 }
 @media (max-width: 1099px) and (min-width: 769px) {
   [class*="st-key-grid_catalogo"] [data-testid="column"],
-  [class*="st-key-grid_por_votar"] [data-testid="column"] { flex: 0 0 calc(50% - 0.3rem) !important; }
+  [class*="st-key-grid_por_votar"] [data-testid="column"] { flex: 0 0 calc(50% - 0.4rem) !important; }
 }
 @media (max-width: 768px) {
   [class*="st-key-grid_catalogo"] [data-testid="column"],
   [class*="st-key-grid_por_votar"] [data-testid="column"] { flex: 1 0 100% !important; min-width: 100% !important; }
 }
 
-/* ============ TARJETA DEL CATÁLOGO 100% CLICABLE ============ */
-/* La tarjeta entera abre la ficha: el botón 'Abrir' se convierte en un
-   overlay transparente que cubre todo el cuadro; el 🗑 del admin queda por
-   encima (z-index superior) para seguir siendo pulsable. */
-[class*="st-key-grid_catalogo"] [class*="st-key-card_"] {
-  position: relative; cursor: pointer;
+/* ---------- 16 · TARJETAS (catálogo + por votar): elevación, hover, overlay ---------- */
+[class*="st-key-grid_catalogo"] [class*="st-key-card_"],
+[class*="st-key-grid_por_votar"] [class*="st-key-card_"] {
+  position: relative; cursor: pointer; min-height: 98px;
+  background: linear-gradient(180deg, #171D27, #141920);
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
 }
-[class*="st-key-grid_catalogo"] [class*="st-key-card_"] [class*="st-key-abrir_"] {
+[class*="st-key-grid_catalogo"] [class*="st-key-card_"]:hover,
+[class*="st-key-grid_por_votar"] [class*="st-key-card_"]:hover {
+  border-color: rgba(74,222,128,0.5) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.42) !important;
+}
+[class*="st-key-grid_catalogo"] [class*="st-key-card_"]:active,
+[class*="st-key-grid_por_votar"] [class*="st-key-card_"]:active { background: #161C26; }
+/* Overlay clicable: el botón 'Abrir' cubre toda la tarjeta */
+[class*="st-key-grid_catalogo"] [class*="st-key-abrir_"],
+[class*="st-key-grid_por_votar"] [class*="st-key-abrir_"] {
   position: absolute; inset: 0; z-index: 1; opacity: 0; cursor: pointer; margin: 0;
 }
-[class*="st-key-grid_catalogo"] [class*="st-key-card_"] [class*="st-key-abrir_"] button {
+[class*="st-key-grid_catalogo"] [class*="st-key-abrir_"] button,
+[class*="st-key-grid_por_votar"] [class*="st-key-abrir_"] button {
   position: absolute; inset: 0; width: 100%; height: 100%;
 }
-[class*="st-key-grid_catalogo"] [class*="st-key-card_"] [class*="st-key-del_"] {
-  position: relative; z-index: 3;
-}
-/* Feedback táctil al activar */
-[class*="st-key-grid_catalogo"] [class*="st-key-card_"]:active {
-  background: #1B2129;
+/* El 🗑 (admin) queda por encima del overlay */
+[class*="st-key-grid_catalogo"] [class*="st-key-del_"] { position: relative; z-index: 3; }
+/* Texto secundario de tarjeta (productor) más legible */
+[class*="st-key-grid_catalogo"] div[style*="font-size:11.5px"],
+[class*="st-key-grid_por_votar"] div[style*="font-size:11.5px"] {
+  font-size: 12.5px !important; color: #A5AEB8 !important;
 }
 
-/* ============ TARJETA 'POR VOTAR' (botones apilados, ancho completo) ============ */
+/* ---------- 17 · TARJETA 'POR VOTAR' (botones apilados, full-width) ---------- */
 [class*="st-key-grid_por_votar"] [class*="st-key-pv_votar_"] { margin-top: 2px; }
 [class*="st-key-grid_por_votar"] [class*="st-key-pv_no_"] { margin-top: 4px; }
 
-/* ============ PESTAÑAS DE VOTACIÓN TÁCTILES (👁️👃👅✨) ============ */
-[data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 0.3rem; overflow-x: auto; flex-wrap: nowrap; }
-[data-testid="stTabs"] [data-baseweb="tab"] {
-  min-height: 46px; padding: 0 1rem; border-radius: 12px 12px 0 0;
-  font-weight: 600; font-size: 14px; white-space: nowrap;
-}
-[data-testid="stTabs"] [data-baseweb="tab-highlight"] { border-radius: 12px 12px 0 0; }
-
-/* ============ BLOQUE NOTA + GUARDAR (voto): sticky al fondo en móvil ============ */
+/* ---------- 18 · BLOQUE NOTA + GUARDAR (voto): sticky al fondo en móvil ---------- */
 .st-key-pv_nota_guardar { position: sticky; bottom: 0.5rem; z-index: 998; }
 @media (max-width: 768px) {
   .st-key-pv_nota_guardar {
-    background: rgba(14, 17, 22, 0.92); backdrop-filter: blur(6px);
+    background: rgba(10, 14, 20, 0.92); backdrop-filter: blur(6px);
     padding: 0.4rem 0.5rem; border-radius: 12px;
     box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.55);
   }
 }
+.st-key-btn_guardar_voto { position: sticky; bottom: 0.5rem; z-index: 999; }
+.st-key-btn_guardar_voto button { box-shadow: 0 -6px 18px rgba(0,0,0,.55); }
 
-/* ============ BOTÓN "CONTINUAR CON GOOGLE" (estilo Google, táctil) ============ */
+/* ---------- 19 · FICHA DE PRODUCTO (2 columnas; colapsa en móvil) ---------- */
+[class*="st-key-ficha_detalle"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; }
+@media (max-width: 768px) {
+  [class*="st-key-ficha_detalle"] [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+    min-width: 100% !important; flex: 1 0 100% !important;
+  }
+}
+
+/* ---------- 20 · RANKINGS: filas con aire, captions legibles, botón integrado ---------- */
+[class*="st-key-rk_lista"] { gap: 0.55rem; }
+[class*="st-key-rk_lista"] [data-testid="stVerticalBlockBorderWrapper"],
+[class*="st-key-grid_catalogo"] [data-testid="stVerticalBlockBorderWrapper"],
+[class*="st-key-grid_por_votar"] [data-testid="stVerticalBlockBorderWrapper"] {
+  background: #141920; border: 1px solid #242C37; border-radius: 14px; padding: 0.45rem 0.6rem;
+}
+[class*="st-key-rk_lista"] [data-testid="stCaptionContainer"] p { color: #A5AEB8 !important; font-size: 12.5px; }
+[class*="st-key-rk_lista"] [data-testid="column"] img { border-radius: 10px; }
+[class*="st-key-rk_lista"] [data-testid="column"]:last-child { text-align: right; }
+[class*="st-key-rk_lista"] [class*="st-key-abrir_rk"] button { min-height: 40px; }
+@media (max-width: 768px) {
+  [class*="st-key-rk_lista"] [data-testid="stVerticalBlockBorderWrapper"] { padding: 0.3rem 0.45rem; }
+  [class*="st-key-rk_lista"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; }
+  [class*="st-key-rk_lista"] [data-testid="stHorizontalBlock"] > [data-testid="column"]:last-child {
+    flex: 1 0 100% !important; min-width: 100% !important;
+  }
+  [class*="st-key-rk_lista"] p { font-size: 13px !important; line-height: 1.3; }
+  [class*="st-key-rk_lista"] [data-testid="column"] { min-width: 0 !important; }
+}
+
+/* ---------- 21 · EVOLUCIÓN: listas agrupadas en tarjeta con gap compacto ---------- */
+[class*="st-key-ev_catas_lista"] [data-testid="stVerticalBlock"],
+[class*="st-key-ev_rank_epoca"] [data-testid="stVerticalBlock"] { gap: 0.5rem; }
+
+/* ---------- 22 · BOTÓN 'CONTINUAR CON GOOGLE' (estilo Google, táctil) ---------- */
 .st-key-btn_google {
   display: flex; align-items: center; justify-content: center; gap: 10px;
   min-height: 46px; border-radius: 10px; font-weight: 600; font-size: 15px;
@@ -379,225 +525,23 @@ footer { visibility: hidden; }
   color: #FFFFFF; font-weight: 800; font-size: 13px; flex: 0 0 auto;
 }
 
-/* ============ FICHA DE PRODUCTO (2 columnas; colapsa en móvil) ============ */
-[class*="st-key-ficha_detalle"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; }
-@media (max-width: 768px) {
-  [class*="st-key-ficha_detalle"] [data-testid="stHorizontalBlock"] > [data-testid="column"] {
-    min-width: 100% !important; flex: 1 0 100% !important;
-  }
+/* ---------- 23 · MÓVIL: compactar, apilar y ocultar header ---------- */
+@media (max-width: 480px) {
+  [data-testid="stMainBlockContainer"] { padding: 0.4rem 0.78rem 3.5rem; max-width: 100%; }
+  [data-testid="stHeader"] { background: transparent; }
+  [data-testid="stHorizontalBlock"]:has([data-testid="stSlider"]),
+  [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]),
+  [data-testid="stHorizontalBlock"]:has(button[data-variant="pills"]) { flex-wrap: wrap; gap: 0.25rem; }
+  [data-testid="stHorizontalBlock"]:has([data-testid="stSlider"]) > [data-testid="column"],
+  [data-testid="stHorizontalBlock"]:has([data-testid="stSelectbox"]) > [data-testid="column"],
+  [data-testid="stHorizontalBlock"]:has(button[data-variant="pills"]) > [data-testid="column"] { min-width: 100% !important; }
 }
 
-/* ============ TEMA PREMIUM (añaditivo, no rompe el layout previo) ============ */
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-html, body, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"] {
-  font-family: 'Plus Jakarta Sans', -apple-system, 'Segoe UI', Roboto, sans-serif !important;
+/* ---------- 24 · HERO (banda de marca) ---------- */
+[data-testid="stMarkdownContainer"] div[style*="border-radius:16px"] {
+  border: 1px solid rgba(74,222,128,0.34);
 }
-[data-testid="stAppViewContainer"] {
-  background:
-    radial-gradient(1200px 620px at 12% -8%, rgba(63,185,106,0.09), transparent 60%),
-    radial-gradient(1050px 520px at 108% -4%, rgba(126,90,224,0.10), transparent 55%),
-    #0E1116;
-}
-::selection { background: rgba(63,185,106,0.30); color: #fff; }
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #2A313C; border-radius: 8px; border: 2px solid #0E1116; }
-::-webkit-scrollbar-track { background: transparent; }
-
-/* Encabezados de sección con acento y peso tipográfico */
-[data-testid="stMarkdown"] h1, [data-testid="stMarkdown"] h2 {
-  font-weight: 800 !important; letter-spacing: -0.01em;
-}
-[data-testid="stMarkdown"] h2 {
-  padding-left: 0.7rem; border-left: 4px solid #3FB96A; color: #EAF6EF;
-}
-
-/* Botones primarios con degradado */
-[data-testid="stButton"] button[kind="primary"],
-[data-testid="stFormSubmitButton"] button[kind="primary"],
-[data-testid="stBaseButton-primary"] {
-  background: linear-gradient(135deg, #2FA45B, #3FB96A) !important;
-  border: none !important;
-}
-
-/* Tarjetas: elevación + transición (solo grids para no saturar formularios) */
-[class*="st-key-grid_catalogo"] [class*="st-key-card_"],
-[class*="st-key-grid_por_votar"] [class*="st-key-card_"] {
-  background: linear-gradient(180deg, #171C23, #14171D);
-  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
-}
-[class*="st-key-grid_catalogo"] [class*="st-key-card_"]:hover,
-[class*="st-key-grid_por_votar"] [class*="st-key-card_"]:hover {
-  border-color: rgba(63,185,106,0.45) !important;
-  transform: translateY(-2px);
-  box-shadow: 0 12px 30px rgba(0,0,0,0.42) !important;
-}
-
-/* Métricas (stats) con tarjeta de vidrio */
-[data-testid="stMetric"] {
-  background: linear-gradient(180deg, #171C23, #14171D);
-  border: 1px solid #262B33 !important; border-radius: 16px;
-  padding: 0.65rem 0.85rem;
-}
-[data-testid="stMetricValue"] { font-weight: 800; color: #EAF6EF; }
-
-/* Pestañas de votación: estado activo resaltado */
-[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] {
-  background: rgba(63,185,106,0.14) !important; color: #A8E6C1 !important;
-}
-
-/* Chips / badges de nota con algo más de presencia */
-[data-testid="stMarkdownContainer"] div[style*="border-radius:999px"] {
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
-  display: inline-block; margin: 2px 5px 2px 0;
-}
-
-/* ============ REFINAMIENTO VISUAL (revisión con visión local) ============ */
-/* Barra de búsqueda con más contraste (input sobre fondo oscuro) */
-[data-testid="stTextInput"] input {
-  background: #1A2029 !important;
-  border: 1px solid #3A4350 !important;
-  color: #EAF0F6 !important;
-  border-radius: 10px;
-}
-[data-testid="stTextInput"] input::placeholder { color: #8B93A1; }
-
-/* Jerarquía: título de sección más grande y con más presencia */
-[data-testid="stMarkdown"] h2 { font-size: 1.45rem; }
-[data-testid="stMarkdown"] h1 { font-size: 1.6rem; }
-
-/* Productor y texto secundario de tarjeta más legible */
-[class*="st-key-grid_catalogo"] div[style*="font-size:11.5px"],
-[class*="st-key-grid_por_votar"] div[style*="font-size:11.5px"] {
-  font-size: 12.5px !important; color: #A5AEB8 !important;
-}
-
-/* Verde neón para acentos activos (mejor legibilidad sobre oscuro) */
-[data-testid="stButton"] button[kind="primary"],
-[data-testid="stFormSubmitButton"] button[kind="primary"],
-[data-testid="stBaseButton-primary"] {
-  background: linear-gradient(135deg, #22C55E, #4ADE80) !important;
-}
-[data-testid="stMarkdown"] h2 {
-  border-left-color: #4ADE80;
-}
-[class*="st-key-grid_catalogo"] [class*="st-key-card_"]:hover,
-[class*="st-key-grid_por_votar"] [class*="st-key-card_"]:hover {
-  border-color: rgba(74,222,128,0.55) !important;
-}
-
-/* Segunda iteración (visión local): pills con estado claro, sidebar legible,
-   chips con borde y altura uniforme de tarjeta.
-   Streamlit 1.61: los pills son button[data-variant="pills"] con role=radio y
-   aria-checked (NO existe data-testid=stPills). */
-button[data-variant="pills"] {
-  border: 1px solid #3A4350 !important;
-  background: #1A2029 !important;
-  color: #C9D2DC !important;
-}
-button[data-variant="pills"][aria-checked="true"] {
-  background: rgba(74,222,128,0.16) !important;
-  border-color: #4ADE80 !important;
-  color: #D9FBE6 !important;
-}
-[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p { color: #A5AEB8 !important; }
-[data-testid="stSidebar"] p { color: #C9D2DC !important; }
-[data-testid="stMarkdownContainer"] div[style*="border-radius:999px"] {
-  border: 1px solid rgba(255,255,255,0.14);
-}
-[class*="st-key-card_"] { min-height: 98px; }
-
-/* Iteración 3: más aire entre tarjetas del grid */
-[class*="st-key-grid_catalogo"] [data-testid="stHorizontalBlock"],
-[class*="st-key-grid_por_votar"] [data-testid="stHorizontalBlock"] { gap: 0.55rem; }
-
-/* ============ RANKINGS: filas con aire, captions legibles y botón integrado ============ */
-[class*="st-key-rk_lista"] { gap: 0.55rem; }
-[class*="st-key-rk_lista"] [data-testid="stCaptionContainer"] p {
-  color: #A5AEB8 !important; font-size: 12.5px;
-}
-/* Botón 'Ver' compacto dentro de la fila de ranking */
-[class*="st-key-rk_lista"] [class*="st-key-abrir_rk"] button { min-height: 40px; }
-/* Móvil: la última columna (botón) apila a ancho completo debajo de la fila,
-   sin romper foto|datos|nota */
-@media (max-width: 768px) {
-  [class*="st-key-rk_lista"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; }
-  [class*="st-key-rk_lista"] [data-testid="stHorizontalBlock"] > [data-testid="column"]:last-child {
-    flex: 1 0 100% !important; min-width: 100% !important;
-  }
-}
-
-/* ============ EVOLUCIÓN: listas agrupadas en tarjeta con gap compacto ============ */
-[class*="st-key-ev_catas_lista"] [data-testid="stVerticalBlock"],
-[class*="st-key-ev_rank_epoca"] [data-testid="stVerticalBlock"] { gap: 0.5rem; }
-
-/* ===================== DESIGN SYSTEM v2 — acabado profesional ===================== */
-/* Se mantienen los tonos oscuros + verde neón; se refina jerarquía, espaciado y
-   micro-interacciones para que NO parezca una web antigua. Solo capa de vista. */
-
-/* --- Fondo con más profundidad (degradado + viñeta sutil) --- */
-[data-testid="stAppViewContainer"] {
-  background:
-    radial-gradient(1300px 700px at 10% -10%, rgba(52,217,123,0.10), transparent 55%),
-    radial-gradient(1100px 600px at 110% -6%, rgba(126,90,224,0.10), transparent 52%),
-    radial-gradient(900px 500px at 50% 120%, rgba(52,217,123,0.05), transparent 60%),
-    #0A0E14;
-}
-
-/* --- Sidebar: degradado vertical y navegación en filas limpias --- */
-[data-testid="stSidebar"] {
-  background: linear-gradient(180deg, #10151D 0%, #0B1017 100%) !important;
-  border-right: 1px solid #1B232D !important;
-}
-[data-testid="stSidebar"] label[data-testid="stRadioOption"] {
-  border-radius: 10px; padding: 0.5rem 0.6rem; margin: 1px 0;
-  transition: background .15s ease, color .15s ease;
-}
-[data-testid="stSidebar"] label[data-testid="stRadioOption"]:hover { background: #151C26; }
-[data-testid="stSidebar"] label[data-testid="stRadioOption"]:has(input:checked) {
-  background: rgba(52,217,123,0.14) !important; color: #CFF5DE !important;
-  box-shadow: inset 0 0 0 1px rgba(52,217,123,0.28);
-}
-
-/* --- Cabeceras de sección: acento y peso --- */
-[data-testid="stMarkdown"] h2 { letter-spacing: -0.02em; }
-
-/* --- Botones: micro-transición (sin cambios de layout) --- */
-[data-testid="stButton"] button, [data-testid="stFormSubmitButton"] button { transition: transform .12s ease, box-shadow .12s ease, filter .12s ease; }
-[data-testid="stButton"] button:hover, [data-testid="stFormSubmitButton"] button:hover { transform: translateY(-1px); filter: brightness(1.05); }
-
-/* --- Inputs y textareas: focus ring verde --- */
-[data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea { transition: border-color .15s ease, box-shadow .15s ease; }
-[data-testid="stTextInput"] input:focus, [data-testid="stTextArea"] textarea:focus {
-  border-color: rgba(52,217,123,0.6) !important;
-  box-shadow: 0 0 0 3px rgba(52,217,123,0.14) !important; outline: none;
-}
-
-/* --- Tabs: subrayado verde limpio + hover --- */
-[data-testid="stTabs"] [data-baseweb="tab-highlight"] { background: #34D97B; }
-[data-testid="stTabs"] [data-baseweb="tab"] { transition: background .15s ease; }
-[data-testid="stTabs"] [data-baseweb="tab"]:hover { background: rgba(255,255,255,0.04); }
-[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] { color: #CFF5DE !important; }
-
-/* --- Pills: estado activo con más presencia --- */
-button[data-variant="pills"] { transition: background .15s ease, border-color .15s ease; }
-button[data-variant="pills"][aria-checked="true"] {
-  background: rgba(52,217,123,0.18) !important; border-color: #34D97B !important;
-}
-
-/* --- Expanders: cabecera más limpia y hover --- */
-[data-testid="stExpander"] summary { transition: background .15s ease; }
-[data-testid="stExpander"] summary:hover { background: rgba(255,255,255,0.03); }
-
-/* --- Avisos (info/éxito/error) en tarjeta suave --- */
-[data-testid="stAlert"] {
-  border-radius: 14px; border: 1px solid #232C37 !important;
-  background: linear-gradient(180deg, #141A23, #121720) !important;
-}
-[data-testid="stAlert"] [data-testid="stMarkdownContainer"] { color: #C9D4E0; }
-
-/* --- Métricas: tarjeta de vidrio (refinado) --- */
-[data-testid="stMetric"] { box-shadow: 0 2px 12px rgba(0,0,0,0.2); }
-</style>""", unsafe_allow_html=True)
+    </style>""", unsafe_allow_html=True)
 
 
 def mostrar_foto(foto: str, width: int = 120, emoji: str = "🌿", b64: str = ""):
