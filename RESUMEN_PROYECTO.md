@@ -73,7 +73,8 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
 ## 6. Patrones críticos al modificar
 
 - **Backup ANTES de tocar**: `app_*_backup_pre_*.py` + QA con backup/restore del JSON
-- **HTML inyectado**: UNA SOLA LÍNEA (sin `\n`) — indentación desigual o `dedent` mal
+- **HTML inyectado**: UNA SOLA LÍNEA (sin `
+`) — indentación desigual o `dedent` mal
   aplicado → `<pre><code>` (HTML en crudo)
 - **QA**: AppTest (`at.session_state` sin `.get()`, clics reales, keys de widgets únicas
   por tab), borrar `_qa_*.py` y `__pycache__` al final
@@ -290,3 +291,17 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   tienen voto (la nota requiere votos) → la sección parecía vacía; se añadió un
   chart de ACTIVIDAD (catas registradas por año, TODAS) antes del de notas.
   Desplegado en 33d8818. QA AppTest 7/7.
+- **DESIGN SYSTEM v3 (ago 2026)**: la CSS acumulada en capas (250+ líneas con
+  parches de parches, degradados y valores contradictorios — el botón primario
+  estaba definido 3 veces con 3 degradados, pills con 2 juegos, h2 con 2
+  tamaños) se consolidó en UN único sistema visual coherente (~24 secciones,
+  -368 líneas): paleta unificada (oscuro #0A0E14 + verde neón #4ADE80),
+  tipografía Plus Jakarta Sans aplicada a encabezados/markdown/widgets
+  (antes los h2 iban en Source Sans → inconsistencia), grids 3-2-1, tarjetas
+  con elevación/hover/overlay, sticky CTA, focus ring verde, sidebar con
+  degradado. Conserva TODOS los selectores funcionales (st-key-*, overlay de
+  tarjeta clicable, grid, sticky). Verificado OBJETIVAMENTE en producción:
+  acento #4ADE80 en h2 ✓, input #171D27 ✓, Plus Jakarta en body/h2/input ✓,
+  12 tarjetas + 15 pills renderizados ✓. QA AppTest 10/10 (contenido, no solo
+  ausencia de excepciones). Desplegado en c6f3295 (DSv3) + 65a5b47
+  (tipografía encabezados).
