@@ -496,6 +496,15 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContain
   border: 1px solid rgba(255,255,255,0.14);
 }
 [class*="st-key-card_"] { min-height: 98px; }
+
+/* Iteración 3: selectbox coherente con los pills + más aire en el grid */
+[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+  background: #1A2029 !important;
+  border: 1px solid #3A4350 !important;
+  border-radius: 10px;
+}
+[class*="st-key-grid_catalogo"] [data-testid="stHorizontalBlock"],
+[class*="st-key-grid_por_votar"] [data-testid="stHorizontalBlock"] { gap: 0.55rem; }
 </style>""", unsafe_allow_html=True)
 
 
