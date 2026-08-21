@@ -4,10 +4,11 @@
 
 [theme]
 base = "dark"
-primaryColor = "#2E7D32"          # verde (acciones)
-backgroundColor = "#0D0F12"       # fondo profundo
-secondaryBackgroundColor = "#161A20"  # tarjetas
-textColor = "#E8E6E1"             # texto principal
+primaryColor = "#4ADE80"          # verde neón (acciones/acentos)
+backgroundColor = "#0E1116"       # fondo profundo
+secondaryBackgroundColor = "#171C23"  # tarjetas
+textColor = "#EAF0F6"             # texto principal
+font = "sans serif"
 
 [browser]
 gatherUsageStats = false

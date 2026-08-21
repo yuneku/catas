@@ -114,11 +114,11 @@ def _rotar_backups():
         pass
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=120, show_spinner=False)
 def cargar() -> dict:
-    """Lee los datos UNA vez (caché 5 min) desde Supabase o catas.json.
-    - TTL 300s: refresca automáticamente los datos escritos por OTROS usuarios
-      sin esperar a que alguien guarde (multi-usuario).
+    """Lee los datos UNA vez (caché 2 min) desde Supabase o catas.json.
+    - TTL 120s: refresca automáticamente los datos escritos por OTROS usuarios
+      sin esperar a que alguien guarde (multi-usuario, más frescura).
     - Se invalida al instante en cada guardar() (nunca datos stale tras escribir).
     - st.cache_data devuelve una COPIA por sesión: mutar el dict no contamina
       la caché ni a otras sesiones (verificado en laboratorio)."""
@@ -525,6 +525,10 @@ button[data-variant="pills"][aria-checked="true"] {
     flex: 1 0 100% !important; min-width: 100% !important;
   }
 }
+
+/* ============ EVOLUCIÓN: listas agrupadas en tarjeta con gap compacto ============ */
+[class*="st-key-ev_catas_lista"] [data-testid="stVerticalBlock"],
+[class*="st-key-ev_rank_epoca"] [data-testid="stVerticalBlock"] { gap: 0.5rem; }
 </style>""", unsafe_allow_html=True)
 
 
@@ -3075,27 +3079,28 @@ def seccion_evolucion(datos: dict):
                 sub = [c for c in catas_base
                        if str(c.get("productor", "")).strip() in elegidos]
                 sub.sort(key=lambda c: (_anio_int(c) or 0, -core.nota_media(c)))
-                st.caption(f"{len(sub)} cata(s) en el gráfico")
-                for c in sub[:12]:
-                    anio = str(c.get("anio", "") or "—")
-                    temp = str(c.get("temporada", "") or "")
-                    nombre = _html.escape(str(c.get("nombre", "—")))
-                    prod = _html.escape(str(c.get("productor", "") or "—"))
-                    color_nota = core.color_nota(core.nota_media(c) / 10)
-                    temp_txt = (f" · <span style='color:{core.COLOR_TEMPORADA.get(temp, '#888')}"
-                                f";font-weight:700'>◈ {temp}</span>" if temp else "")
-                    # HTML en UNA SOLA LÍNEA (evita HTML en crudo)
-                    st.markdown(
-                        '<div style="display:flex;align-items:center;gap:10px">'
-                        f'<div style="flex:0 0 auto">{foto_productor_html(c.get("productor", ""), 32)}</div>'
-                        '<div style="flex:1;min-width:0">'
-                        f'<div style="font-weight:600;font-size:14px;color:#F2F5F9">{nombre}</div>'
-                        f'<div style="font-size:12px;color:#8B93A1">{anio}{temp_txt} · {prod}</div>'
-                        '</div>'
-                        f'<div style="text-align:right;font-size:19px;font-weight:800;color:{color_nota}">'
-                        f'{core.nota_media(c):.1f}</div>'
-                        '</div>',
-                        unsafe_allow_html=True)
+                with st.container(key="ev_catas_lista", border=True):
+                    st.markdown(f"**{len(sub)} cata(s)** en el gráfico")
+                    for c in sub[:12]:
+                        anio = str(c.get("anio", "") or "—")
+                        temp = str(c.get("temporada", "") or "")
+                        nombre = _html.escape(str(c.get("nombre", "—")))
+                        prod = _html.escape(str(c.get("productor", "") or "—"))
+                        color_nota = core.color_nota(core.nota_media(c) / 10)
+                        temp_txt = (f" · <span style='color:{core.COLOR_TEMPORADA.get(temp, '#888')}"
+                                    f";font-weight:700'>◈ {temp}</span>" if temp else "")
+                        # HTML en UNA SOLA LÍNEA (evita HTML en crudo)
+                        st.markdown(
+                            '<div style="display:flex;align-items:center;gap:10px">'
+                            f'<div style="flex:0 0 auto">{foto_productor_html(c.get("productor", ""), 32)}</div>'
+                            '<div style="flex:1;min-width:0">'
+                            f'<div style="font-weight:600;font-size:14px;color:#F2F5F9">{nombre}</div>'
+                            f'<div style="font-size:12px;color:#8B93A1">{anio}{temp_txt} · {prod}</div>'
+                            '</div>'
+                            f'<div style="text-align:right;font-size:19px;font-weight:800;color:{color_nota}">'
+                            f'{core.nota_media(c):.1f}</div>'
+                            '</div>',
+                            unsafe_allow_html=True)
 
     # ---------- Tab 2: quién era el mejor en una época ----------
     with tab_epoca:
@@ -3114,30 +3119,31 @@ def seccion_evolucion(datos: dict):
             st.bar_chart(rank.set_index("productor")["nota_media"],
                          horizontal=True, height=280)
             # Ranking en tarjetas con la FOTO del productor (circular)
-            st.caption("Top por nota media en la época seleccionada:")
-            medallas = {1: "🥇", 2: "🥈", 3: "🥉"}
-            for i, r in enumerate(rank.itertuples(), start=1):
-                pais = pais_prod.get(r.productor, "")
-                chip_pais = (chip(_html.escape(pais),
-                                  core.COLOR_PAIS.get(pais, "#444444"))
-                             if pais else "")
-                color_nota = core.color_nota(r.nota_media / 10)
-                pos = f"{medallas.get(i, '')} {i}º"
-                # HTML en UNA SOLA LÍNEA (evita HTML en crudo)
-                st.markdown(
-                    '<div style="display:flex;align-items:center;gap:12px">'
-                    f'<div style="flex:0 0 auto">{foto_productor_html(r.productor, 44)}</div>'
-                    '<div style="flex:1;min-width:0">'
-                    f'<div style="font-weight:700;font-size:14px;color:#F2F5F9">'
-                    f'{pos} · {_html.escape(str(r.productor))}</div>'
-                    f'<div style="font-size:12px;color:#8B93A1;margin-top:2px">'
-                    f'{chip_pais if chip_pais else ""} {int(r.n_catas)} cata'
-                    f'{"s" if r.n_catas != 1 else ""}</div>'
-                    '</div>'
-                    f'<div style="text-align:right;font-size:21px;font-weight:800;color:{color_nota}">'
-                    f'{r.nota_media:.1f}</div>'
-                    '</div>',
-                    unsafe_allow_html=True)
+            with st.container(key="ev_rank_epoca", border=True):
+                st.markdown(f"**Top por nota media** en la época seleccionada:")
+                medallas = {1: "🥇", 2: "🥈", 3: "🥉"}
+                for i, r in enumerate(rank.itertuples(), start=1):
+                    pais = pais_prod.get(r.productor, "")
+                    chip_pais = (chip(_html.escape(pais),
+                                      core.COLOR_PAIS.get(pais, "#444444"))
+                                 if pais else "")
+                    color_nota = core.color_nota(r.nota_media / 10)
+                    pos = f"{medallas.get(i, '')} {i}º"
+                    # HTML en UNA SOLA LÍNEA (evita HTML en crudo)
+                    st.markdown(
+                        '<div style="display:flex;align-items:center;gap:12px">'
+                        f'<div style="flex:0 0 auto">{foto_productor_html(r.productor, 44)}</div>'
+                        '<div style="flex:1;min-width:0">'
+                        f'<div style="font-weight:700;font-size:14px;color:#F2F5F9">'
+                        f'{pos} · {_html.escape(str(r.productor))}</div>'
+                        f'<div style="font-size:12px;color:#8B93A1;margin-top:2px">'
+                        f'{chip_pais if chip_pais else ""} {int(r.n_catas)} cata'
+                        f'{"s" if r.n_catas != 1 else ""}</div>'
+                        '</div>'
+                        f'<div style="text-align:right;font-size:21px;font-weight:800;color:{color_nota}">'
+                        f'{r.nota_media:.1f}</div>'
+                        '</div>',
+                        unsafe_allow_html=True)
 
 
 # =============================================================================
