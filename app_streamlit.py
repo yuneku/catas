@@ -226,7 +226,7 @@ html, body, [data-testid="stAppViewContainer"] { background: #0E1116; }
 
 /* ============ BOTONES ERGONÓMICOS (44-48px) ============ */
 [data-testid="stButton"] button, [data-testid="stFormSubmitButton"] button {
-  min-height: 46px; border-radius: 10px; font-weight: 600; font-size: 15px;
+  min-height: 48px; border-radius: 10px; font-weight: 600; font-size: 15px;
 }
 [data-testid="stButton"] button[kind="primary"],
 [data-testid="stFormSubmitButton"] button[kind="primary"],
@@ -294,6 +294,28 @@ footer { visibility: hidden; }
   [class*="st-key-grid_catalogo"] [data-testid="column"],
   [class*="st-key-grid_por_votar"] [data-testid="column"] { flex: 1 0 100% !important; min-width: 100% !important; }
 }
+
+/* ============ TARJETA DEL CATÁLOGO 100% CLICABLE ============ */
+/* La tarjeta entera abre la ficha: el botón 'Abrir' se convierte en un
+   overlay transparente que cubre todo el cuadro; el 🗑 del admin queda por
+   encima (z-index superior) para seguir siendo pulsable. */
+[class*="st-key-grid_catalogo"] [data-testid="stVerticalBlockBorderWrapper"] {
+  position: relative; cursor: pointer;
+}
+[class*="st-key-grid_catalogo"] [class*="st-key-abrir_"] {
+  position: absolute; inset: 0; z-index: 1; opacity: 0; cursor: pointer; margin: 0;
+}
+[class*="st-key-grid_catalogo"] [class*="st-key-del_"] {
+  position: relative; z-index: 3;
+}
+/* Feedback táctil al activar */
+[class*="st-key-grid_catalogo"] [data-testid="stVerticalBlockBorderWrapper"]:active {
+  background: #1B2129;
+}
+
+/* ============ TARJETA 'POR VOTAR' (botones apilados, ancho completo) ============ */
+[class*="st-key-grid_por_votar"] [class*="st-key-pv_votar_"] { margin-top: 2px; }
+[class*="st-key-grid_por_votar"] [class*="st-key-pv_no_"] { margin-top: 4px; }
 
 /* ============ PESTAÑAS DE VOTACIÓN TÁCTILES (👁️👃👅✨) ============ */
 [data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 0.3rem; overflow-x: auto; flex-wrap: nowrap; }
@@ -819,7 +841,13 @@ def menu_movil(datos: dict):
         st.session_state["menu_abierto"] = not st.session_state.get("menu_abierto", False)
     if st.session_state.get("menu_abierto"):
         with st.container(border=True):
-            st.caption("Navegación")
+            c1, c2 = st.columns([5, 1])
+            with c1:
+                st.caption("🗺 Navegación")
+            with c2:
+                if st.button("✕", key="menu_cerrar", use_container_width=True):
+                    st.session_state["menu_abierto"] = False
+                    st.rerun()
             for p in paginas_para(datos):
                 if st.button(p, key=f"menu_{p}", use_container_width=True):
                     st.session_state["pagina"] = p
@@ -859,16 +887,21 @@ def sidebar(datos: dict):
             except Exception as _e:
                 st.caption(f"🔍 error leyendo secrets: {_e}")
         if core._db_nube() is not None and len(datos["catas"]) == 0:
-            try:
-                import db_supabase as _db
-                _fresh = _db.cargar_datos()  # carga DIRECTA, sin la caché de la app
-                st.caption(f"🔍 carga directa (sin caché): "
-                           f"{len(_fresh['catas'])} catas")
-                _err = getattr(_db, "_ULTIMO_ERROR", "")
-                if _err:
-                    st.caption(f"⚠️ {str(_err)[:130]}")
-            except Exception:
-                pass
+            # Diagnóstico puntual: se lee la BD directa UNA sola vez (no en cada
+            # rerun) para no alargar cada interacción cuando la caché vino vacía.
+            if not st.session_state.get("_diag_supabase"):
+                st.session_state["_diag_supabase"] = True
+                try:
+                    import db_supabase as _db
+                    with st.spinner("Comprobando Supabase…"):
+                        _fresh = _db.cargar_datos()  # carga DIRECTA, sin caché
+                    st.caption(f"🔍 carga directa (sin caché): "
+                               f"{len(_fresh['catas'])} catas")
+                    _err = getattr(_db, "_ULTIMO_ERROR", "")
+                    if _err:
+                        st.caption(f"⚠️ {str(_err)[:130]}")
+                except Exception:
+                    pass
 
         # ---- Sesión (usuario logueado o modo invitado) ----
         st.divider()
@@ -1627,27 +1660,24 @@ def tarjeta_por_votar(cata: dict, datos: dict, perfil_id: str):
     )
     st.markdown(html_tarjeta, unsafe_allow_html=True)
 
-    # Botones: Votar (CTA) + No lo probé (descarte inmediato con toast)
-    b_votar, b_no = st.columns([2, 1])
-    with b_votar:
-        if st.button("🗳 Votar", type="primary",
-                     key=f"pv_votar_{cata['id']}", use_container_width=True):
-            st.session_state["votar_id"] = cata["id"]
-            st.rerun(scope="app")  # cambio de vista: formulario a ancho completo
-    with b_no:
-        if st.button("🙈 No lo probé", key=f"pv_no_{cata['id']}",
-                     use_container_width=True):
-            if core.descartar_cata(datos, cata["id"], perfil_id) == "nuevo":
-                guardar(datos)  # solo persiste si no estaba ya descartada
-            st.toast(f"🙈 '{nombre_txt}' marcado como no probado")
-            try:
-                # Segundo pase del fragmento: recalcula la lista y esta tarjeta
-                # desaparece SIN recargar la app (recarga parcial ultrarrápida).
-                st.rerun(scope="fragment")
-            except Exception:
-                # Solo ocurre en contextos de testing (AppTest) donde el click
-                # no dispara un fragment rerun aislado; en el navegador nunca.
-                pass
+    # Botones apilados a ancho completo: Votar (CTA) y 'No lo probé'
+    if st.button("🗳 Votar", type="primary", key=f"pv_votar_{cata['id']}",
+                 use_container_width=True):
+        st.session_state["votar_id"] = cata["id"]
+        st.rerun(scope="app")  # cambio de vista: formulario a ancho completo
+    if st.button("🙈 No lo probé", key=f"pv_no_{cata['id']}",
+                 use_container_width=True):
+        if core.descartar_cata(datos, cata["id"], perfil_id) == "nuevo":
+            guardar(datos)  # solo persiste si no estaba ya descartada
+        st.toast(f"🙈 '{nombre_txt}' marcado como no probado")
+        try:
+            # Segundo pase del fragmento: recalcula la lista y esta tarjeta
+            # desaparece SIN recargar la app (recarga parcial ultrarrápida).
+            st.rerun(scope="fragment")
+        except Exception:
+            # Solo ocurre en contextos de testing (AppTest) donde el click
+            # no dispara un fragment rerun aislado; en el navegador nunca.
+            pass
 
 
 def formulario_voto(datos: dict, cata: dict, perfil: dict, perfil_id: str):
@@ -1809,18 +1839,17 @@ def tarjeta_catalogo(cata: dict, datos: dict, admin: bool):
     )
     st.markdown(html_tarjeta, unsafe_allow_html=True)
 
-    # Botones compactos: abrir ficha (siempre) + eliminar (solo admin)
-    b_abrir, b_del = st.columns([3, 1])
-    with b_abrir:
-        if st.button("📂 Abrir ficha", key=f"abrir_{cata['id']}",
+    # 'Abrir ficha' se convierte (por CSS) en un overlay invisible que cubre
+    # TODA la tarjeta → tocar foto, nombre, chips o el hueco abre la ficha,
+    # sin zona muerta. El 🗑 del admin queda por encima y sigue pulsable.
+    if st.button("📂 Abrir ficha", key=f"abrir_{cata['id']}",
+                 use_container_width=True):
+        st.session_state["ficha_id"] = cata["id"]
+        st.rerun()
+    if admin:
+        if st.button("🗑 Eliminar", key=f"del_{cata['id']}",
                      use_container_width=True):
-            st.session_state["ficha_id"] = cata["id"]
-            st.rerun()
-    with b_del:
-        if admin:
-            if st.button("🗑", key=f"del_{cata['id']}",
-                         use_container_width=True):
-                dialogo_eliminar_producto(datos, cata)
+            dialogo_eliminar_producto(datos, cata)
 
 
 def seccion_catalogo(datos: dict):
