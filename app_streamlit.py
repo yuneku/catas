@@ -317,17 +317,20 @@ footer { visibility: hidden; }
 /* La tarjeta entera abre la ficha: el botón 'Abrir' se convierte en un
    overlay transparente que cubre todo el cuadro; el 🗑 del admin queda por
    encima (z-index superior) para seguir siendo pulsable. */
-[class*="st-key-grid_catalogo"] [data-testid="stVerticalBlockBorderWrapper"] {
+[class*="st-key-grid_catalogo"] [class*="st-key-card_"] {
   position: relative; cursor: pointer;
 }
-[class*="st-key-grid_catalogo"] [class*="st-key-abrir_"] {
+[class*="st-key-grid_catalogo"] [class*="st-key-card_"] [class*="st-key-abrir_"] {
   position: absolute; inset: 0; z-index: 1; opacity: 0; cursor: pointer; margin: 0;
 }
-[class*="st-key-grid_catalogo"] [class*="st-key-del_"] {
+[class*="st-key-grid_catalogo"] [class*="st-key-card_"] [class*="st-key-abrir_"] button {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+}
+[class*="st-key-grid_catalogo"] [class*="st-key-card_"] [class*="st-key-del_"] {
   position: relative; z-index: 3;
 }
 /* Feedback táctil al activar */
-[class*="st-key-grid_catalogo"] [data-testid="stVerticalBlockBorderWrapper"]:active {
+[class*="st-key-grid_catalogo"] [class*="st-key-card_"]:active {
   background: #1B2129;
 }
 
@@ -409,13 +412,13 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContain
 }
 
 /* Tarjetas: elevación + transición (solo grids para no saturar formularios) */
-[class*="st-key-grid_catalogo"] [data-testid="stVerticalBlockBorderWrapper"],
-[class*="st-key-grid_por_votar"] [data-testid="stVerticalBlockBorderWrapper"] {
+[class*="st-key-grid_catalogo"] [class*="st-key-card_"],
+[class*="st-key-grid_por_votar"] [class*="st-key-card_"] {
   background: linear-gradient(180deg, #171C23, #14171D);
   transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
 }
-[class*="st-key-grid_catalogo"] [data-testid="stVerticalBlockBorderWrapper"]:hover,
-[class*="st-key-grid_por_votar"] [data-testid="stVerticalBlockBorderWrapper"]:hover {
+[class*="st-key-grid_catalogo"] [class*="st-key-card_"]:hover,
+[class*="st-key-grid_por_votar"] [class*="st-key-card_"]:hover {
   border-color: rgba(63,185,106,0.45) !important;
   transform: translateY(-2px);
   box-shadow: 0 12px 30px rgba(0,0,0,0.42) !important;
@@ -1680,7 +1683,7 @@ def lista_por_votar(datos: dict, perfil: dict, perfil_id: str):
             cols = st.columns(3)
             for col, cata in zip(cols, fila):
                 with col:
-                    with st.container(border=True):
+                    with st.container(border=True, key=f"card_{cata['id']}"):
                         tarjeta_por_votar(cata, datos, perfil_id)
     if len(pendientes) > n_max:
         if st.button(f"⬇️ Mostrar más ({len(pendientes) - n_max} restantes)",
@@ -2041,7 +2044,7 @@ def _catalogo_grid(datos: dict, admin: bool):
             cols = st.columns(3)
             for col, cata in zip(cols, fila):
                 with col:
-                    with st.container(border=True):
+                    with st.container(border=True, key=f"card_{cata['id']}"):
                         tarjeta_catalogo(cata, datos, admin)
     if len(lista) > n_max:
         if st.button(f"⬇️ Mostrar más ({len(lista) - n_max} restantes)",
