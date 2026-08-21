@@ -440,6 +440,41 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContain
 /* Chips / badges de nota con algo más de presencia */
 [data-testid="stMarkdownContainer"] div[style*="border-radius:999px"] {
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+  display: inline-block; margin: 2px 5px 2px 0;
+}
+
+/* ============ REFINAMIENTO VISUAL (revisión con visión local) ============ */
+/* Barra de búsqueda con más contraste (input sobre fondo oscuro) */
+[data-testid="stTextInput"] input {
+  background: #1A2029 !important;
+  border: 1px solid #3A4350 !important;
+  color: #EAF0F6 !important;
+  border-radius: 10px;
+}
+[data-testid="stTextInput"] input::placeholder { color: #8B93A1; }
+
+/* Jerarquía: título de sección más grande y con más presencia */
+[data-testid="stMarkdown"] h2 { font-size: 1.45rem; }
+[data-testid="stMarkdown"] h1 { font-size: 1.6rem; }
+
+/* Productor y texto secundario de tarjeta más legible */
+[class*="st-key-grid_catalogo"] div[style*="font-size:11.5px"],
+[class*="st-key-grid_por_votar"] div[style*="font-size:11.5px"] {
+  font-size: 12.5px !important; color: #A5AEB8 !important;
+}
+
+/* Verde neón para acentos activos (mejor legibilidad sobre oscuro) */
+[data-testid="stButton"] button[kind="primary"],
+[data-testid="stFormSubmitButton"] button[kind="primary"],
+[data-testid="stBaseButton-primary"] {
+  background: linear-gradient(135deg, #22C55E, #4ADE80) !important;
+}
+[data-testid="stMarkdown"] h2 {
+  border-left-color: #4ADE80;
+}
+[class*="st-key-grid_catalogo"] [class*="st-key-card_"]:hover,
+[class*="st-key-grid_por_votar"] [class*="st-key-card_"]:hover {
+  border-color: rgba(74,222,128,0.55) !important;
 }
 </style>""", unsafe_allow_html=True)
 
@@ -952,8 +987,8 @@ def hero(datos: dict, logueado: bool):
                  f"{_html.escape(str(st.session_state.get('usuario', '')))}</span>")
     st.markdown(
         f'<div style="border-radius:16px;padding:0.75rem 1.05rem;margin:0 0 0.7rem;'
-        f'background:linear-gradient(135deg,rgba(63,185,106,0.16),rgba(126,90,224,0.13));'
-        f'border:1px solid rgba(63,185,106,0.26);">'
+        f'background:linear-gradient(135deg,rgba(74,222,128,0.18),rgba(126,90,224,0.13));'
+        f'border:1px solid rgba(74,222,128,0.34);">'
         f'<div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">'
         f'<span style="font-size:1.3rem;font-weight:800;color:#F2F5F9;'
         f'letter-spacing:-0.02em;">🌿 TerpsXHunter</span>'
