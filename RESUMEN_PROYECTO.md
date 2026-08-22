@@ -389,3 +389,11 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   Podium con medallas intacto. Verificado en producción: conAsteriscos=0,
   nombres limpios, botón Ver verde. QA AppTest 8/8. Desplegado en 1b1918d
   (estilo) + 3c02504 (fix negrita).
+- **MARCA = LOGO DEL PERSONAJE (ago 2026)**: se quitó la hoja (🌿) de toda la
+  marca y se usó el logo del personaje como identidad: sidebar (avatar + nombre
+  sin hoja), hero del Inicio (título sin hoja), contador del sidebar. Además se
+  añadió FAVICON (icono de pestaña) con el logo: assets/favicon.png (64px
+  circular) + apple-touch-icon.png (180px), page_icon apunta a assets/favicon.png.
+  Verificado en producción: favicon servido como PNG de 10KB (el logo), título de
+  pestaña TerpsXHunter. QA AppTest 8/8. Desplegado en 7e31ff6 (quitar hoja) +
+  a6c8726 (favicon).
