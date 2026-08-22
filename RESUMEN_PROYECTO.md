@@ -355,3 +355,14 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   la nube). Verificado en producción: haySVG=true, tituloShadow
   rgba(126,90,224,0.25), y en la captura se ve el degradado verde→violeta.
   QA AppTest 9/9. Desplegado en 4283cc8 (app + requirements).
+- **SISTEMA DE VOTACIÓN REDISEÑADO (ago 2026)**: el formulario de voto (usado
+  en "Por votar" y en la ficha premium) se hizo más visual/intuitivo/profesional
+  sin perder funciones: (a) la NOTA FINAL pasó de una métrica gris a una tarjeta
+  con color SEMÁNTICO según el valor (verde/ámbar/rojo via color_nota) + barra de
+  progreso; (b) el título de cada bloque (Aspecto/Aroma/Sabor/Efectos) ahora se
+  muestra en tarjeta con su nota en color en vivo; (c) sliders más táctiles
+  (thumb 26px, track 7px, label en negrita); (d) bloque sticky de nota+guardar
+  pulido (borde verde translúcido, gap compacto, botones a full-width en móvil).
+  Verificado en producción con sesión (perfil _qa_visual): nota 50.0/100 en
+  ámbar con barra al 50%. QA AppTest 5/5 (formulario real: 15 sliders + tarjeta
+  de nota + ficha). Desplegado en 194ddb2.
