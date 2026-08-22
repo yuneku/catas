@@ -684,6 +684,15 @@ button[data-variant="pills"][aria-checked="true"] {
   background-position: center; opacity: 0.16;
   z-index: 9999; pointer-events: none;
 }
+/* En MÓVIL la marca de agua se hace más pequeña y se va a la esquina
+   inferior-derecha: el contenido va a ancho completo y un sello centrado
+   compite con las tarjetas. Así es un detalle sutil en la esquina. */
+@media (max-width: 768px) {
+  .marca-agua {
+    width: min(230px, 52vw); height: min(230px, 52vw);
+    left: auto; right: 4%; top: 82%; opacity: 0.10;
+  }
+}
 
     </style>""", unsafe_allow_html=True)
 
