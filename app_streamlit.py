@@ -77,7 +77,7 @@ core._avisar_error = lambda *args, **kwargs: st.error(
     args[0] if args else "Error de datos")
 
 st.set_page_config(
-    page_title="🌿 TerpsXHunter",
+    page_title="TerpsXHunter",
     page_icon="🌿",
     layout="wide",
     initial_sidebar_state="collapsed",  # mobile-first: sidebar colapsado al abrir
@@ -1223,7 +1223,7 @@ def hero(datos: dict, logueado: bool):
 
 def sidebar(datos: dict):
     with st.sidebar:
-        # Cabecera de marca: logo pequeño del personaje + nombre (sin subtítulo)
+        # Cabecera de marca: logo del personaje como identidad (sin emoji hoja)
         logo_b64 = _asset_b64("inicio_avatar.jpg")
         if logo_b64:
             st.markdown(
@@ -1233,11 +1233,11 @@ def sidebar(datos: dict):
                 f'border-radius:12px;object-fit:cover;border:2px solid '
                 f'rgba(126,90,224,0.55);box-shadow:0 3px 10px rgba(0,0,0,0.4)">'
                 f'<span style="font-size:1.15rem;font-weight:800;color:#F2F5F9;'
-                f'letter-spacing:-0.02em;">🌿 TerpsXHunter</span>'
+                f'letter-spacing:-0.02em;">TerpsXHunter</span>'
                 f'</div>',
                 unsafe_allow_html=True)
         else:
-            st.markdown("## 🌿 TerpsXHunter")
+            st.markdown("## TerpsXHunter")
 
         # ---- Estado de datos (diagnóstico de conexión) ----
         if core._db_nube() is not None:
@@ -1319,7 +1319,7 @@ def sidebar(datos: dict):
         total = len(datos["catas"])
         votos = sum(len(core.votos_validos(c)) for c in datos["catas"])
         st.divider()
-        st.caption(f"🌿 {total} catas · {votos} votos")
+        st.caption(f"{total} catas · {votos} votos")
 
 
 def perfil_activo(datos: dict):
@@ -4057,7 +4057,7 @@ def seccion_inicio(datos: dict, logueado: bool):
         f'<div style="min-width:0">'
         f'<div style="font-size:1.85rem;font-weight:800;color:#F5F8FB;'
         f'letter-spacing:-0.03em;line-height:1.1;text-shadow:0 2px 18px rgba(0,0,0,0.6)">'
-        f'🌿 TerpsXHunter</div>'
+        f'TerpsXHunter</div>'
         f'<div style="font-size:1rem;color:#D7DEE8;margin-top:6px;max-width:520px;'
         f'text-shadow:0 1px 10px rgba(0,0,0,0.6)">{_html.escape(intro)}</div>'
         f'<div style="margin-top:12px;font-size:0.82rem">{chip}'
