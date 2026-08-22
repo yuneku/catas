@@ -484,6 +484,32 @@ button[data-variant="pills"][aria-checked="true"] {
   [class*="st-key-grid_por_votar"] [data-testid="column"] { flex: 1 0 100% !important; min-width: 100% !important; }
 }
 
+/* ---------- 15b · GRID DE INICIO (tarjetas de navegación 3-2-1) ---------- */
+[class*="st-key-inicio_grid"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: 0.6rem; }
+[class*="st-key-inicio_grid"] [data-testid="column"] { min-width: 0; }
+@media (min-width: 1100px) {
+  [class*="st-key-inicio_grid"] [data-testid="column"] { flex: 0 0 calc(33.33% - 0.4rem) !important; }
+}
+@media (max-width: 1099px) and (min-width: 769px) {
+  [class*="st-key-inicio_grid"] [data-testid="column"] { flex: 0 0 calc(50% - 0.4rem) !important; }
+}
+@media (max-width: 768px) {
+  [class*="st-key-inicio_grid"] [data-testid="column"] { flex: 1 0 100% !important; min-width: 100% !important; }
+}
+/* Tarjetas de navegación del Inicio: centradas, con hover verde */
+[class*="st-key-inicio_grid"] [class*="st-key-inicio_card_"] {
+  background: linear-gradient(180deg, #171D27, #141920);
+  border: 1px solid #242C37; border-radius: 16px; min-height: 130px;
+  display: flex; flex-direction: column; justify-content: center;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+[class*="st-key-inicio_grid"] [class*="st-key-inicio_card_"]:hover {
+  border-color: rgba(74,222,128,0.5) !important;
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.42) !important;
+}
+[class*="st-key-inicio_grid"] [class*="st-key-inicio_card_"] button { min-height: 38px; }
+
 /* ---------- 16 · TARJETAS (catálogo + por votar): elevación, hover, overlay ---------- */
 [class*="st-key-grid_catalogo"] [class*="st-key-card_"],
 [class*="st-key-grid_por_votar"] [class*="st-key-card_"] {
@@ -764,6 +790,27 @@ def _b64_a_jpeg(b64: str, px: int, cuadrado: bool) -> str:
         return base64.b64encode(buf.getvalue()).decode("ascii")
     except Exception:
         return b64  # fallback seguro: original
+
+
+@st.cache_data(show_spinner=False)
+def _asset_b64(nombre: str) -> str:
+    """Lee un asset de la carpeta assets/ y devuelve su data URI base64.
+    Funciona igual en local y en la NUBE (Streamlit embebe el repo, así que
+    assets/ está presente). Cacheado para no releer el archivo cada rerun."""
+    try:
+        base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+        rutas = [os.path.join(base, nombre),
+                 os.path.join(os.getcwd(), "assets", nombre)]
+        for r in rutas:
+            if os.path.exists(r):
+                with open(r, "rb") as f:
+                    data = f.read()
+                mime = "image/png" if nombre.lower().endswith(".png") else "image/jpeg"
+                return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+    except Exception:
+        pass
+    return ""
+
 
 
 @st.cache_data(show_spinner=False)
@@ -1104,12 +1151,14 @@ def paginas_para(datos: dict) -> list:
     - Admin / gente de confianza: todas (pueden crear productos).
     - Usuario normal: todo menos crear productos (➕ Nueva Cata)."""
     if not st.session_state.get("usuario"):
-        return ["📦 Catálogo", "➕ Nueva Cata", "🎯 Por votar", "🏭 Productores",
-                "🏆 Rankings", "📈 Evolución", "🏪 Asociaciones", "👥 Perfiles"]
+        return ["🏠 Inicio", "📦 Catálogo", "➕ Nueva Cata", "🎯 Por votar",
+                "🏭 Productores", "🏆 Rankings", "📈 Evolución",
+                "🏪 Asociaciones", "👥 Perfiles"]
     if es_admin(datos) or es_profesional(datos):
-        return ["📦 Catálogo", "➕ Nueva Cata", "🎯 Por votar", "🏭 Productores",
-                "🏆 Rankings", "📈 Evolución", "🏪 Asociaciones", "👥 Perfiles"]
-    return ["📦 Catálogo", "🎯 Por votar", "🏭 Productores",
+        return ["🏠 Inicio", "📦 Catálogo", "➕ Nueva Cata", "🎯 Por votar",
+                "🏭 Productores", "🏆 Rankings", "📈 Evolución",
+                "🏪 Asociaciones", "👥 Perfiles"]
+    return ["🏠 Inicio", "📦 Catálogo", "🎯 Por votar", "🏭 Productores",
             "🏆 Rankings", "📈 Evolución", "🏪 Asociaciones", "👥 Perfiles"]
 
 
@@ -3938,6 +3987,113 @@ def seccion_asociaciones(datos: dict):
     panel_admin_coffeeshops(datos)
 
 
+# =============================================================================
+# SECCIÓN INICIO — portada: hero con la imagen de marca + tarjetas de navegación
+# =============================================================================
+
+def seccion_inicio(datos: dict, logueado: bool):
+    """Portada: banner grande con la imagen del personaje (fondo + overlay para
+    legibilidad) y tarjetas clicables que llevan a cada sección. Integra la
+    estética de la imagen (violeta galaxia + verde neón) de forma profesional."""
+    n = len(datos.get("catas", []))
+    if core._db_nube() is not None:
+        chip = "<span style='color:#8BE9B0;font-weight:700'>🟢 Conectado</span>"
+    else:
+        chip = "<span style='color:#E8C35A;font-weight:700'>💾 Modo local</span>"
+    if logueado:
+        chip += (f"&nbsp;&nbsp;<span style='color:#A5AEB8'>·&nbsp;👤 "
+                 f"{_html.escape(str(st.session_state.get('usuario', '')))}</span>")
+
+    hero_b64 = _asset_b64("inicio_hero.jpg")
+    avatar_b64 = _asset_b64("inicio_avatar.jpg")
+
+    intro = (
+        "Tu registro de catas con calificaciones, rankings y una comunidad "
+        "que comparte su criterio." if logueado else
+        "Registra catas, puntúalas y descubre rankings de la comunidad. "
+        "Inicia sesión para votar, o explora primero como invitado.")
+
+    # ---- HERO: imagen de fondo + overlay degradado para legibilidad ----
+    estilo_img = (f"background:url('{hero_b64}') center/cover no-repeat;"
+                  if hero_b64 else
+                  "background:linear-gradient(135deg,rgba(126,90,224,0.30),rgba(74,222,128,0.22));")
+    st.markdown(
+        f'<div style="position:relative;border-radius:20px;overflow:hidden;'
+        f'border:1px solid rgba(126,90,224,0.35);box-shadow:0 12px 40px rgba(0,0,0,0.45);'
+        f'min-height:300px;display:flex;align-items:flex-end;{estilo_img}">'
+        f'<div style="position:absolute;inset:0;background:linear-gradient(180deg,'
+        f'rgba(10,13,22,0.25) 0%,rgba(10,13,22,0.55) 55%,rgba(10,13,22,0.92) 100%);"></div>'
+        f'<div style="position:relative;padding:2.2rem 1.6rem 1.5rem;width:100%;'
+        f'display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;flex-wrap:wrap;">'
+        f'<div style="min-width:0">'
+        f'<div style="font-size:1.85rem;font-weight:800;color:#F5F8FB;'
+        f'letter-spacing:-0.03em;line-height:1.1;text-shadow:0 2px 18px rgba(0,0,0,0.6)">'
+        f'🌿 TerpsXHunter</div>'
+        f'<div style="font-size:1rem;color:#D7DEE8;margin-top:6px;max-width:520px;'
+        f'text-shadow:0 1px 10px rgba(0,0,0,0.6)">{_html.escape(intro)}</div>'
+        f'<div style="margin-top:12px;font-size:0.82rem">{chip}'
+        f'&nbsp;&nbsp;<span style="color:#A5AEB8">· {n} catas registradas</span></div>'
+        f'</div>'
+        f'<div style="flex:0 0 auto">'
+        f'<img src="{avatar_b64}" alt="" style="width:116px;height:116px;'
+        f'border-radius:20px;object-fit:cover;border:2px solid rgba(126,90,224,0.5);'
+        f'box-shadow:0 6px 22px rgba(0,0,0,0.5)">'
+        f'</div></div></div>',
+        unsafe_allow_html=True)
+
+    # ---- Acceso rápido: botón de sesión si invitado ----
+    if not logueado:
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            if st.button("🔑 Iniciar sesión para votar", key="inicio_login",
+                         type="primary", width="stretch"):
+                st.session_state["pagina"] = "🔐 Acceso"
+                st.rerun()
+        with c2:
+            if st.button("✨ Crear mi perfil", key="inicio_registro",
+                         width="stretch"):
+                st.session_state["pagina"] = "🔐 Acceso"
+                st.rerun()
+
+    st.markdown("### 🧭 Explora las secciones")
+    st.caption("Toca una tarjeta para ir a esa sección.")
+
+    # ---- Tarjetas de navegación (clicable, con icono + descripción) ----
+    secciones = [
+        ("📦", "Catálogo", "Busca, filtra y abre la ficha de cada producto.", "📦 Catálogo"),
+        ("🎯", "Por votar", "Puntúa los productos que te faltan por probar.", "🎯 Por votar"),
+        ("🏭", "Productores", "Cultivadores, sus catas y su nota media.", "🏭 Productores"),
+        ("🏆", "Rankings", "Top general, personal y de la comunidad.", "🏆 Rankings"),
+        ("📈", "Evolución", "Tendencia por año, temporada y productor.", "📈 Evolución"),
+        ("🏪", "Asociaciones", "Coffeeshops y dónde encontrar cada producto.", "🏪 Asociaciones"),
+        ("👥", "Perfiles", "Tu perfil, preferencias y contraseña.", "👥 Perfiles"),
+    ]
+    if es_admin(datos) or es_profesional(datos):
+        secciones.insert(1, ("➕", "Nueva Cata", "Añade un nuevo producto al registro.",
+                             "➕ Nueva Cata"))
+
+    # Grid responsivo 3-2-1 columnas
+    with st.container(key="inicio_grid"):
+        for i in range(0, len(secciones), 3):
+            fila = secciones[i:i + 3]
+            cols = st.columns(3)
+            for col, (icono, titulo, desc, pagina_dest) in zip(cols, fila):
+                with col:
+                    with st.container(key=f"inicio_card_{pagina_dest}", border=True):
+                        st.markdown(
+                            f'<div style="text-align:center;padding:6px 4px 2px">'
+                            f'<div style="font-size:2rem;line-height:1">{icono}</div>'
+                            f'<div style="font-weight:800;font-size:15px;color:#F2F5F9;'
+                            f'margin-top:6px">{_html.escape(titulo)}</div>'
+                            f'<div style="font-size:12px;color:#A5AEB8;margin-top:3px;'
+                            f'line-height:1.4">{_html.escape(desc)}</div></div>',
+                            unsafe_allow_html=True)
+                        if st.button("Abrir", key=f"inicio_btn_{pagina_dest}",
+                                     width="stretch"):
+                            st.session_state["pagina"] = pagina_dest
+                            st.rerun()
+
+
 def seccion_perfiles(datos: dict):
     st.markdown("## 👥 Perfiles")
     admin = es_admin(datos)
@@ -3967,13 +4123,13 @@ def seccion_perfiles(datos: dict):
 # =============================================================================
 
 # Secciones visibles sin iniciar sesión (modo invitado, solo lectura)
-PAGINAS_LECTURA = {"📦 Catálogo", "🏭 Productores", "🏆 Rankings",
+PAGINAS_LECTURA = {"🏠 Inicio", "📦 Catálogo", "🏭 Productores", "🏆 Rankings",
                    "📈 Evolución", "🏪 Asociaciones"}
 
 # Claves de sesión con valor por defecto (se crean UNA vez al arrancar)
 _STATE_DEFAULTS = {
     "usuario": "",            # perfil logueado ('' = invitado)
-    "pagina": "📦 Catálogo",  # sección activa
+    "pagina": "🏠 Inicio",    # sección activa (arranca en la portada)
     "menu_abierto": False,    # panel ☰ móvil
     "ficha_id": None,         # ficha de producto abierta en catálogo
     "prod_ficha": None,       # ficha de productor abierta
@@ -4022,9 +4178,9 @@ def main():
     # La página se lee DESPUÉS del sidebar: el radio de navegación es quien
     # actualiza session_state["pagina"] con la opción pulsada. Leerla antes
     # provocaba que la sección mostrada fuera siempre la del clic anterior.
-    pagina = st.session_state.get("pagina", "📦 Catálogo")
+    pagina = st.session_state.get("pagina", "🏠 Inicio")
     if pagina == "🔐 Acceso":  # caso residual tras iniciar sesión
-        pagina = "📦 Catálogo"
+        pagina = "🏠 Inicio"
 
     # Scroll al inicio al cambiar de sección/ficha/formulario: evita quedarse
     # a mitad de página en el móvil. Se inyecta SOLO cuando la vista cambia.
@@ -4047,9 +4203,14 @@ def main():
         pantalla_login(datos)
         return
 
-    hero(datos, logueado)
+    # El hero compacto se muestra en todas las secciones MENOS en Inicio
+    # (que tiene su propio banner grande con la imagen de marca).
+    if pagina != "🏠 Inicio":
+        hero(datos, logueado)
 
-    if pagina == "📦 Catálogo":
+    if pagina == "🏠 Inicio":
+        seccion_inicio(datos, logueado)
+    elif pagina == "📦 Catálogo":
         seccion_catalogo(datos)
     elif pagina == "➕ Nueva Cata":
         seccion_nueva_cata(datos)
