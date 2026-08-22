@@ -461,3 +461,14 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   esperan los helpers. QA AppTest 21/21 (SELECT sin fotos, cargar_fotos real 5/5,
   inyección, 8 secciones OK). Verificado en producción: 12 tarjetas con 12 fotos
   renderizadas. Desplegado en ac2b859.
+- **PASO 6 AUDITORÍA (DRY): HELPERS CONSOLIDADOS (ago 2026)**: 4 helpers de foto
+  unificados en 2: _foto_b64_thumb+_foto_b64_redim -> _b64_a_jpeg_memo (memoización
+  única por md5/px/cuadrado); _foto_base64_cached+_foto_base64_fluid_cached ->
+  _foto_archivo_cached (parámetro fluid para el podio). Call-sites públicos intactos.
+  El cálculo de nota ya vivía en core (sin duplicar). QA AppTest 22/22; verificado en
+  producción (12 fotos renderizadas). Desplegado en 1d851d2.
+- **AUDITORÍA COMPLETA (6 PASOS)**: 1) login endurecido (rate-limit+anti enumeración)
+  ebba6bf; 2) handler global de errores + toggle reclamación 8732191; 3) auth.py
+  extraído c2acac1; 4) guardado incremental de votos ecfd3c0; 5) carga perezosa de
+  fotos ac2b859; 6) helpers DRY 1d851d2. Diagnóstico original y roadmap en el informe
+  de auditoría (este archivo, sección correspondiente).
