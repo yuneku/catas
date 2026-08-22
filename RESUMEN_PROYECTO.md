@@ -314,3 +314,13 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   enterraba el título); imagen en tarjeta con altura contenida; cajas de
   Votaciones/Comentarios pulidas (tarjeta con hover, menos "post de foro").
   QA AppTest 6/6. Desplegado en faea2c2.
+- **FOTOS EN LA FICHA/RANKING + CSS BASE CAJAS (ago 2026)**: bug real — en modo
+  nube la foto del producto es un b64 de la BD (no un archivo local), así que
+  `ficha_premium` y las filas de ranking usaban `st.image(resolver_ruta_foto(...))`
+  sin el b64 → caían al placeholder verde. Se pasó a `foto_base64`/`foto_base64_fluid`
+  (que omiten el archivo y usan el b64). Verificado objetivamente: la ficha ahora
+  muestra un `<img src="data:image/jpeg;base64,...">` de 46KB a 420×320. Además se
+  unificó un CSS BASE para TODOS los contenedores con borde (`stVerticalBlockBorderWrapper`)
+  que antes heredaban el borde gris por defecto de Streamlit (leía como "post de foro").
+  Revisadas visualmente también login y perfiles (professionales). QA AppTest 7/7.
+  Desplegado en 40ecbb3.
