@@ -681,7 +681,7 @@ button[data-variant="pills"][aria-checked="true"] {
   transform: translate(-50%, -50%);
   width: min(640px, 88vw); height: min(640px, 88vw);
   background-size: contain; background-repeat: no-repeat;
-  background-position: center; opacity: 0.14;
+  background-position: center; opacity: 0.16;
   z-index: 9999; pointer-events: none;
 }
 
