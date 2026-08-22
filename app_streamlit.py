@@ -1664,6 +1664,58 @@ def _manejar_retorno_oauth(datos: dict):
 # PANTALLA DE LOGIN / REGISTRO
 # =============================================================================
 
+# -----------------------------------------------------------------------------
+# LOGIN ENDURECIDO (seguridad): rate-limit con backoff exponencial
+# -----------------------------------------------------------------------------
+_MAX_INTENTOS = 5          # fallos antes de activar el bloqueo
+_BLOQUEO_INICIAL_S = 30    # backoff inicial (se dobla en cada tanda)
+_CAMPO_LOGIN = "login_intentos"
+
+
+def _clave_login(nombre: str) -> str:
+    """Identificador del intento: IP del cliente + nombre introducido.
+    El castigo recae sobre el usuario/atacante concreto, no sobre todos."""
+    ip = ""
+    try:
+        cab = st.context.headers or {}
+        ip = str(cab.get("X-Forwarded-For", "")).split(",")[0].strip() \
+             or str(cab.get("Remote-Addr", "")).strip()
+    except Exception:
+        pass
+    return f"{ip}|{nombre}"
+
+
+def _login_intentos() -> dict:
+    """Estado {n, hasta, quien, tandas}. Crea el registro la primera vez."""
+    st.session_state.setdefault(_CAMPO_LOGIN,
+                                {"n": 0, "hasta": 0.0, "quien": "", "tandas": 0})
+    return st.session_state[_CAMPO_LOGIN]
+
+
+def _login_resto_bloqueo(estado: dict, quien: str) -> float:
+    """Segundos que faltan para poder reintentar (0 = se puede intentar)."""
+    if estado.get("quien") != quien or time.time() >= estado.get("hasta", 0):
+        return 0.0
+    return estado["hasta"] - time.time()
+
+
+def _login_fallo(estado: dict, quien: str) -> None:
+    """Registra un fallo; activa backoff exponencial al llegar al tope.
+    El backoff se dobla en cada tanda: 30s -> 60s -> 120s..."""
+    estado["n"] += 1
+    estado["quien"] = quien
+    if estado["n"] >= _MAX_INTENTOS:
+        estado["tandas"] = estado.get("tandas", 0) + 1
+        estado["hasta"] = time.time() + _BLOQUEO_INICIAL_S * (2 ** (estado["tandas"] - 1))
+        estado["n"] = 0  # la tanda se reinicia; el backoff queda en 'hasta'
+
+
+def _login_exito(estado: dict) -> None:
+    """Limpia el contador tras un login correcto."""
+    estado["n"], estado["hasta"], estado["quien"] = 0, 0.0, ""
+    estado["tandas"] = 0
+
+
 def pantalla_login(datos: dict):
     """Muestra login y registro; solo se llega al resto de la app con sesión."""
     st.markdown("## 🌿 TerpsXHunter")
@@ -1675,26 +1727,38 @@ def pantalla_login(datos: dict):
         l_nombre = st.text_input("Nombre de usuario", autocomplete="username")
         l_pw = st.text_input("Contraseña", type="password",
                              autocomplete="current-password")
+        l_pw_conf = st.text_input("Confirmar contraseña (solo para reclamar cuenta)",
+                                  type="password",
+                                  autocomplete="new-password")
         l_recordar = st.checkbox("🔒 Recordarme en este dispositivo", value=True)
         entrar = st.form_submit_button("🔓 Entrar", type="primary",
                                        width="stretch")
     if entrar:
         nombre = l_nombre.strip()
+        quien = _clave_login(nombre)
+        estado = _login_intentos()
+        resto = _login_resto_bloqueo(estado, quien)
+        if resto > 0:
+            # Backoff activo: mensaje genérico (no confirma que el usuario existe)
+            st.error(f"⏳ Demasiados intentos. Espera {int(resto) + 1} s y reintenta.")
+            return
+
         perfil = perfil_por_nombre(datos, nombre)
-        if perfil is None:
-            st.error(f"'{nombre}' no existe. Regístrate abajo.")
-        elif perfil.get("password_hash"):
-            if verificar_password(l_pw, perfil["password_hash"]):
-                st.session_state["usuario"] = perfil["nombre"]
-                if l_recordar:
-                    _escribir_cookie(_crear_token_sesion(perfil["id"]))
-                st.rerun()
-            else:
-                st.error("Contraseña incorrecta.")
-        else:
-            # Cuenta antigua sin contraseña: la primera persona que ponga una
-            # la reclama (sistema de amigos; el admin puede resetearla después).
-            if l_pw:
+        valido = False
+        if perfil is not None and perfil.get("password_hash"):
+            valido = verificar_password(l_pw, perfil["password_hash"])
+
+        if valido:
+            _login_exito(estado)
+            st.session_state["usuario"] = perfil["nombre"]
+            if l_recordar:
+                _escribir_cookie(_crear_token_sesion(perfil["id"]))
+            st.rerun()
+
+        # ---- Rama de reclamación de cuenta (perfil sin password_hash) ----
+        if perfil is not None and not perfil.get("password_hash"):
+            if l_pw and l_pw == l_pw_conf:
+                _login_exito(estado)
                 perfil["password_hash"] = hash_password(l_pw)
                 guardar(datos)
                 st.session_state["usuario"] = perfil["nombre"]
@@ -1702,9 +1766,16 @@ def pantalla_login(datos: dict):
                     _escribir_cookie(_crear_token_sesion(perfil["id"]))
                 st.success(f"✅ Contraseña asignada a '{nombre}'. ¡Bienvenido!")
                 st.rerun()
+            elif l_pw:
+                st.error("La confirmación de contraseña no coincide.")
             else:
                 st.warning(f"'{nombre}' todavía no tiene contraseña: escríbela "
-                           "aquí para reclamar la cuenta.")
+                           "dos veces para reclamar la cuenta.")
+            return
+
+        # Fallo genérico: NO revela si el nombre existe ni qué falló
+        _login_fallo(estado, quien)
+        st.error("Credenciales incorrectas. Revisa nombre y contraseña.")
 
     # ---- Continuar con Google (OAuth; complementa al login tradicional) ----
     cfg_google = _credenciales_google()
