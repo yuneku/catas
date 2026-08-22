@@ -415,3 +415,13 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
       con las tarjetas a ancho completo (en escritorio queda centrado y grande, que es
       donde lucía). Verificado en móvil (vw 390): contenido limpio, contorno en esquina.
 
+- **AUDITORÍA + PASO 1: LOGIN ENDURECIDO (ago 2026)**: auditoría integral (arquitectura/
+  rendimiento/seguridad) de los 3 módulos. Paso 1 aplicado: rate-limit con backoff
+  exponencial en el login (5 fallos -> bloqueo 30s, se dobla por tanda: 30/60/120...),
+  grano por IP+usuario (session_state); mensaje GENÉRICO de credenciales incorrectas
+  (ya no filtra si el usuario existe ni distingue contraseña inválida — anti enumeración);
+  reclamación de cuenta sin contraseña exige confirmación (campo l_pw_conf). QA AppTest
+  19/19 (mensaje genérico, backoff, 6º intento bloqueado, secciones intactas).
+  Verificado en producción: campo Confirmar presente. Desplegado en ebba6bf.
+  Roadmap pendiente: 2) handler global de errores en main(), 3) extraer auth.py,
+  4) guardado incremental de votos, 5) carga perezosa de fotos, 6) consolidar helpers.
