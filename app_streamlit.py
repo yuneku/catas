@@ -4219,10 +4219,9 @@ def main():
         pantalla_login(datos)
         return
 
-    # El hero compacto se muestra en todas las secciones MENOS en Inicio
-    # (que tiene su propio banner grande con la imagen de marca).
-    if pagina != "🏠 Inicio":
-        hero(datos, logueado)
+    # El recuadro 'TerpsXHunter' con la imagen solo está en el INICIO
+    # (seccion_inicio usa su propio banner grande). El resto de secciones
+    # arrancan directamente con su título, sin la banda compacta.
 
     if pagina == "🏠 Inicio":
         seccion_inicio(datos, logueado)
