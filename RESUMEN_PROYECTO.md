@@ -425,3 +425,12 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   Verificado en producción: campo Confirmar presente. Desplegado en ebba6bf.
   Roadmap pendiente: 2) handler global de errores en main(), 3) extraer auth.py,
   4) guardado incremental de votos, 5) carga perezosa de fotos, 6) consolidar helpers.
+- **PASO 2 AUDITORÍA (ago 2026)**: handler global de errores en main(): el dispatch
+  de secciones va en try/except que LOGUEA el traceback completo a consola (solo el
+  admin lo ve) y muestra un mensaje amigable sin rutas ni valores internos. Mensajes
+  de excepción saneados: OAuth y guardado ya no exponen str(e) en la UI (se loguean).
+  LOGIN: la reclamación de cuenta pasó a un TOGGLE desplegable ('Reclamar cuenta sin
+  contraseña') para que el campo de confirmación no ocupe espacio en el acceso normal.
+  QA AppTest 16/16 (toggle ON/OFF, handler atrapa ficha inexistente, mensaje genérico,
+  8 secciones OK). Verificado en producción: toggle presente, sin campo Confirmar en
+  login normal. Desplegado en 8732191.
