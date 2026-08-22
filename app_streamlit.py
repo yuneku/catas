@@ -687,13 +687,16 @@ button[data-variant="pills"][aria-checked="true"] {
 
 
 def _inyectar_marca_agua():
-    """Marca de agua sutil con el logo del personaje, fija y detrás del contenido.
-    No intercepta clics (pointer-events:none) y se ve muy tenue (opacity 0.05)."""
+    """Marca de agua sutil con el contorno del personaje, fija y detrás del
+    contenido. No intercepta clics (pointer-events:none) y se ve tenue.
+    Se usa st.markdown (no st.html) porque inyecta en el flujo del main."""
     wm_b64 = _asset_b64("watermark_circle.png")
     if not wm_b64:
         return
-    st.html(
-        f'<div class="marca-agua" style="background-image:url(\'{wm_b64}\')"></div>')
+    st.markdown(
+        f'<div class="marca-agua" '
+        f'style="background-image:url(&quot;{wm_b64}&quot;)"></div>',
+        unsafe_allow_html=True)
 
 
 def mostrar_foto(foto: str, width: int = 120, emoji: str = "🌿", b64: str = ""):
