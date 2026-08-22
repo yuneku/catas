@@ -361,6 +361,17 @@ footer { visibility: hidden; }
 [data-testid="stVerticalBlockBorderWrapper"]:hover {
   border-color: rgba(74,222,128,0.35);
 }
+/* Tarjetas de coffeeshop (asociaciones): estilo coherente con hover verde */
+.cs-card {
+  background: linear-gradient(180deg, #171D27, #141920);
+  border: 1px solid #242C37; border-radius: 16px; padding: 15px 15px 13px;
+  display: flex; flex-direction: column; gap: 9px; min-height: 210px;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.cs-card:hover {
+  border-color: rgba(74,222,128,0.5); transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.42);
+}
 
 /* ---------- 6 · SLIDERS TÁCTILES ---------- */
 [data-testid="stSlider"] [role="slider"] { width: 24px !important; height: 24px !important; margin-top: -12px !important; }
@@ -3357,7 +3368,8 @@ def _tarjeta_perfil(datos: dict, perfil: dict, admin: bool):
 # =============================================================================
 
 def tarjeta_coffeeshop(datos: dict, cs: dict, posicion: int = 0) -> str:
-    """Tarjeta del grid: foto, nombre, ubicación, nota media, pills."""
+    """Tarjeta del grid: foto, nombre, ubicación, nota media, pills.
+    Estilo coherente con el Design System (verde neón + oscuro)."""
     nota = core.nota_media_coffeeshop(cs)
     n_votos = len(core.votos_coffeeshop_validos(cs))
     ciudad = core.ciudad_por_id(datos, cs.get("ciudad_id", "")).get("nombre", "")
@@ -3365,35 +3377,35 @@ def tarjeta_coffeeshop(datos: dict, cs: dict, posicion: int = 0) -> str:
     ubicacion = " · ".join(x for x in [ciudad, pais] if x) or "—"
     prod_nombres = [p.get("nombre", "")
                     for p in core.productores_de_coffeeshop(datos, cs)]
+    # Pills de productores en verde neón (coherente con el resto de chips de la app)
     pills = " ".join(
-        f"<span style='background:#1B2230;color:#8AB4F8;padding:2px 8px;"
-        f"border-radius:10px;font-size:11px;font-weight:bold;margin:2px 3px 2px 0'>"
+        f"<span style='background:rgba(74,222,128,0.14);color:#8BE9B0;"
+        f"border:1px solid rgba(74,222,128,0.28);padding:2px 9px;"
+        f"border-radius:10px;font-size:11px;font-weight:600;margin:2px 3px 2px 0'>"
         f"{_html.escape(str(n))}</span>" for n in prod_nombres[:5])
     if not pills:
-        pills = ("<span style='color:#5A6472;font-size:11px'>"
+        pills = ("<span style='color:#7A8391;font-size:11px'>"
                  "sin productores vinculados</span>")
-    color_nota = core.color_nota(nota / 10) if nota else "#5A6472"
-    nota_html = (f"<span style='font-size:22px;font-weight:800;"
+    color_nota = core.color_nota(nota / 10) if nota else "#7A8391"
+    nota_html = (f"<span style='font-size:24px;font-weight:800;"
                  f"color:{color_nota}'>{nota:.1f}</span>") if nota else (
-        f"<span style='font-size:14px;color:#5A6472'>sin votos</span>")
-    foto_html = (foto_base64("", px=84, radius=10,
+        f"<span style='font-size:14px;color:#7A8391'>sin votos</span>")
+    foto_html = (foto_base64("", px=84, radius=12,
                              b64=cs.get("foto_b64", ""))
                  or placeholder_imagen(84, "🏪"))
     medalla = {1: "🥇", 2: "🥈", 3: "🥉"}.get(posicion, "") if posicion else ""
     return (
-        f"<div style='background:#161A20;border:1px solid #232A35;"
-        f"border-radius:14px;padding:14px;display:flex;flex-direction:column;"
-        f"gap:8px;min-height:250px'>"
+        f"<div class='cs-card'>"
         f"<div style='display:flex;justify-content:space-between;align-items:start;"
         f"gap:8px'>"
-        f"<div style='font-size:17px;font-weight:800;color:#E8E6E1;line-height:1.25'>"
+        f"<div style='font-size:16px;font-weight:800;color:#F2F5F9;line-height:1.25'>"
         f"{medalla} {_html.escape(str(cs.get('nombre', '')))}</div>"
         f"<div style='text-align:right'>{nota_html}<div style='font-size:10px;"
-        f"color:#5A6472'>{n_votos} voto{'s' if n_votos != 1 else ''}</div></div>"
+        f"color:#7A8391'>{n_votos} voto{'s' if n_votos != 1 else ''}</div></div>"
         f"</div>"
-        f"<div style='display:flex;justify-content:center;padding:4px 0'>"
+        f"<div style='display:flex;justify-content:center;padding:2px 0'>"
         f"{foto_html}</div>"
-        f"<div style='font-size:12px;color:#8A93A0'>📍 {_html.escape(ubicacion)}</div>"
+        f"<div style='font-size:12px;color:#A5AEB8'>📍 {_html.escape(ubicacion)}</div>"
         f"<div style='display:flex;flex-wrap:wrap;margin-top:auto'>{pills}</div>"
         f"</div>")
 
