@@ -613,3 +613,170 @@ def guardar_datos(datos: dict) -> None:
         raise
     finally:
         _devolver(conn)
+
+
+def guardar_voto_incremental(cata_id: str, voto: dict, version_cliente) -> bool:
+    """Upsert directo de UN voto (Paso 4 auditoría: rendimiento).
+
+    Sustituye al re-sync total cuando solo cambia el voto de una cata que ya
+    existe en la BD: 1 solo UPSERT + bump de versión, en vez de borrar y
+    re-insertar TODAS las tablas. Un voto pasa de ~7 s a <100 ms.
+
+    - Respeta el guard multi-usuario (meta_estado FOR UPDATE): si otro usuario
+      escribió desde que cargamos, lanza ErrorVersionAntigua (el llamador
+      recarga datos frescos).
+    - Devuelve True si se guardó; False si no aplica/falla (el llamador cae al
+      re-sync total como fallback seguro).
+    """
+    conn = _conectar()
+    if conn is None:
+        return False
+    try:
+        cur = conn.cursor()
+
+        # ---- Guard multi-usuario (misma semántica que guardar_datos) ----
+        try:
+            cur.execute("SELECT version FROM meta_estado WHERE id = 1 FOR UPDATE")
+            _fila = cur.fetchone()
+            _v_bd = _fila[0] if _fila else 0
+            if version_cliente is not None and _v_bd != version_cliente:
+                raise ErrorVersionAntigua(_v_bd, version_cliente)
+        except ErrorVersionAntigua:
+            raise
+        except Exception:
+            pass  # tabla ausente: sin control de versiones
+
+        # ---- UPSERT del voto (1 round-trip) ----
+        cur.execute(
+            "INSERT INTO votos (cata_id, perfil_id, fecha, "
+            "puntuaciones_detalle, notas_bloques, nota_final) "
+            "VALUES (%s, %s, %s, %s, %s, %s) "
+            "ON CONFLICT (cata_id, perfil_id) DO UPDATE SET "
+            "fecha = EXCLUDED.fecha, "
+            "puntuaciones_detalle = EXCLUDED.puntuaciones_detalle, "
+            "notas_bloques = EXCLUDED.notas_bloques, "
+            "nota_final = EXCLUDED.nota_final",
+            (cata_id, voto.get("perfil_id"), voto.get("fecha", ""),
+             json.dumps(voto.get("puntuaciones_detalle", {}), ensure_ascii=False),
+             json.dumps(voto.get("notas_bloques", {}), ensure_ascii=False),
+             float(voto.get("nota_final", 0.0))))
+
+        # ---- Bump de versión (misma transacción) ----
+        try:
+            cur.execute("UPDATE meta_estado SET version = version + 1, "
+                        "updated_at = now() WHERE id = 1")
+        except Exception:
+            pass
+
+        conn.commit()
+        cur.close()
+        return True
+    except ErrorVersionAntigua:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return False  # fallo transitorio: el llamador usa el re-sync total
+    finally:
+        _devolver(conn)
+
+
+def guardar_voto_cs_incremental(cs_id: str, voto: dict, version_cliente) -> bool:
+    """Upsert directo de UN voto de coffeeshop (Paso 4 auditoría).
+    Misma lógica que guardar_voto_incremental pero sobre votos_coffeeshops."""
+    conn = _conectar()
+    if conn is None:
+        return False
+    try:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT version FROM meta_estado WHERE id = 1 FOR UPDATE")
+            _fila = cur.fetchone()
+            _v_bd = _fila[0] if _fila else 0
+            if version_cliente is not None and _v_bd != version_cliente:
+                raise ErrorVersionAntigua(_v_bd, version_cliente)
+        except ErrorVersionAntigua:
+            raise
+        except Exception:
+            pass
+        cur.execute(
+            "INSERT INTO votos_coffeeshops "
+            "(coffeeshop_id, perfil_id, fecha, nota, comentario) "
+            "VALUES (%s, %s, %s, %s, %s) "
+            "ON CONFLICT (coffeeshop_id, perfil_id) DO UPDATE SET "
+            "fecha = EXCLUDED.fecha, nota = EXCLUDED.nota, "
+            "comentario = EXCLUDED.comentario",
+            (cs_id, voto.get("perfil_id"), voto.get("fecha", ""),
+             float(voto.get("nota", 0.0)), voto.get("comentario", "")))
+        try:
+            cur.execute("UPDATE meta_estado SET version = version + 1, "
+                        "updated_at = now() WHERE id = 1")
+        except Exception:
+            pass
+        conn.commit()
+        cur.close()
+        return True
+    except ErrorVersionAntigua:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return False
+    finally:
+        _devolver(conn)
+
+
+def quitar_voto_cs_incremental(cs_id: str, perfil_id: str, version_cliente) -> bool:
+    """Borra UN voto de coffeeshop (Paso 4 auditoría)."""
+    conn = _conectar()
+    if conn is None:
+        return False
+    try:
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT version FROM meta_estado WHERE id = 1 FOR UPDATE")
+            _fila = cur.fetchone()
+            _v_bd = _fila[0] if _fila else 0
+            if version_cliente is not None and _v_bd != version_cliente:
+                raise ErrorVersionAntigua(_v_bd, version_cliente)
+        except ErrorVersionAntigua:
+            raise
+        except Exception:
+            pass
+        cur.execute("DELETE FROM votos_coffeeshops "
+                    "WHERE coffeeshop_id = %s AND perfil_id = %s",
+                    (cs_id, perfil_id))
+        try:
+            cur.execute("UPDATE meta_estado SET version = version + 1, "
+                        "updated_at = now() WHERE id = 1")
+        except Exception:
+            pass
+        conn.commit()
+        cur.close()
+        return True
+    except ErrorVersionAntigua:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        return False
+    finally:
+        _devolver(conn)

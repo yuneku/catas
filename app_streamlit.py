@@ -2003,6 +2003,36 @@ def guardar_voto(datos, perfil, nombre, productor, pais, tipo, anio, temporada,
         accion = "existente"
 
     resultado = core.upsert_voto(cata, perfil["id"], scores)
+
+    # ---- Guardado incremental (Paso 4 auditoría: rendimiento) ----
+    # Si la cata ya existía y NO se subió foto nueva, solo cambió el voto:
+    # se hace un UPSERT directo en la BD (1 round-trip) en vez del re-sync
+    # total de todas las tablas. Si no aplica o falla, cae al re-sync normal.
+    if accion == "existente" and upload is None:
+        try:
+            import db_supabase as _db
+            if _db.activo():
+                voto_nuevo = core.voto_de_perfil(cata, perfil["id"])
+                if _db.guardar_voto_incremental(
+                        cata["id"], voto_nuevo, datos.get("_version")):
+                    cargar.clear()
+                    for k in list(st.session_state.keys()):
+                        if k.startswith(("f_", "nc_")):
+                            del st.session_state[k]
+                    st.success(f"✅ Voto de {perfil['nombre']} "
+                               f"{'ACTUALIZADO' if resultado == 'actualizado' else 'guardado'} — "
+                               f"{cata['nombre']} · "
+                               f"{core._flotante(voto_nuevo.get('nota_final')):.1f}/100")
+                    return
+        except core.ErrorVersionAntigua:
+            st.toast("🔄 Otro usuario guardó cambios más recientes. "
+                     "Recargando datos actualizados…", icon="🔄")
+            cargar.clear()
+            st.rerun()
+            return
+        except Exception as e:
+            print(f"[guardar_voto] ⚠️ incremental falló, usando re-sync: {e}")
+
     guardar(datos)
     for k in list(st.session_state.keys()):
         if k.startswith(("f_", "nc_")):
@@ -3932,6 +3962,28 @@ def _votacion_cs(datos: dict, cs: dict):
     if st.button("💾 Guardar mi valoración", type="primary",
                  key="cs_guardar_voto", width="stretch"):
         core.upsert_voto_coffeeshop(cs, perfil["id"], nota_slider, comentario)
+        # Incremental (Paso 4): solo cambió este voto de coffeeshop
+        try:
+            import db_supabase as _db
+            if _db.activo():
+                voto_cs = core.voto_coffeeshop_de_perfil(cs, perfil["id"])
+                if _db.guardar_voto_cs_incremental(
+                        cs["id"], voto_cs, datos.get("_version")):
+                    cargar.clear()
+                    st.toast("✅ Valoración guardada.")
+                    try:
+                        st.rerun(scope="fragment")
+                    except Exception:
+                        pass
+                    return
+        except core.ErrorVersionAntigua:
+            st.toast("🔄 Otro usuario guardó cambios más recientes. "
+                     "Recargando…", icon="🔄")
+            cargar.clear()
+            st.rerun()
+            return
+        except Exception as e:
+            print(f"[voto_cs] ⚠️ incremental falló, usando re-sync: {e}")
         guardar(datos)
         st.toast("✅ Valoración guardada.")
         try:
@@ -3944,6 +3996,25 @@ def _votacion_cs(datos: dict, cs: dict):
                       if ya_votado.get("comentario") else ""))
         if st.button("🗑 Quitar mi voto", key="cs_quitar_voto"):
             core.quitar_voto_coffeeshop(cs, perfil["id"])
+            try:
+                import db_supabase as _db
+                if _db.activo():
+                    if _db.quitar_voto_cs_incremental(
+                            cs["id"], perfil["id"], datos.get("_version")):
+                        cargar.clear()
+                        try:
+                            st.rerun(scope="fragment")
+                        except Exception:
+                            pass
+                        return
+            except core.ErrorVersionAntigua:
+                st.toast("🔄 Otro usuario guardó cambios más recientes. "
+                         "Recargando…", icon="🔄")
+                cargar.clear()
+                st.rerun()
+                return
+            except Exception as e:
+                print(f"[voto_cs] ⚠️ quitar incremental falló, usando re-sync: {e}")
             guardar(datos)
             try:
                 st.rerun(scope="fragment")
