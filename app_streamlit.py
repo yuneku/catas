@@ -675,11 +675,11 @@ button[data-variant="pills"][aria-checked="true"] {
 /* ---------- 26 · MARCA DE AGUA SUTIL (contorno del personaje) ---------- */
 /* Fijo detrás del contenido, tenue pero perceptible, sin interceptar clics. */
 .marca-agua {
-  position: fixed; top: 50%; left: 50%;
+  position: fixed; top: 50%; left: 45%;
   transform: translate(-50%, -50%);
-  width: min(560px, 82vw); height: min(560px, 82vw);
+  width: min(640px, 88vw); height: min(640px, 88vw);
   background-size: contain; background-repeat: no-repeat;
-  background-position: center; opacity: 0.13;
+  background-position: center; opacity: 0.2;
   z-index: 0; pointer-events: none;
 }
 
