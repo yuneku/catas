@@ -443,3 +443,10 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   Probado CONTRA SUPABASE REAL: guarda (True), version vieja -> ErrorVersionAntigua,
   bump 4->5, dato limpiado después (11 votos restaurados). QA AppTest 12/12.
   Desplegado en ecfd3c0.
+- **PASO 3 AUDITORÍA: AUTH.PY EXTRAÍDO (ago 2026)**: la autenticación (hash PBKDF2,
+  tokens HMAC, cookies, Google OAuth completo) se movió a auth.py — módulo propio que
+  SOLO depende de app_datos (core) y streamlit, sin importar app_streamlit (no hay
+  ciclos). En app_streamlit se quedan los 2 handlers de sesión que usan guardar()
+  (_auto_login_cookie, _manejar_retorno_oauth) adaptados a auth.*. app_streamlit pasó
+  de 4471 a 4284 líneas. QA AppTest 27/27 (funciones auth, hash/token round-trip,
+  login, 8 secciones). Verificado en producción. Desplegado en c2acac1.
