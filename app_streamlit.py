@@ -684,15 +684,14 @@ button[data-variant="pills"][aria-checked="true"] {
   background-position: center; opacity: 0.16;
   z-index: 9999; pointer-events: none;
 }
-/* En MÓVIL la marca de agua se hace más pequeña y se va a la esquina
-   inferior-derecha. Se ANULA el transform (translate -50%) de escritorio
-   para que right/bottom la anclen a la esquina de verdad (si no, el -50%
-   la descuadra a la izquierda y arriba). */
+/* En MÓVIL la marca de agua sigue GRANDE y centrada para ocupar la pantalla
+   (como en escritorio), pero con opacidad más baja: al ser un contorno de
+   líneas finas (no relleno) no tapa el contenido ni molesta. */
 @media (max-width: 768px) {
   .marca-agua {
-    width: min(230px, 52vw); height: min(230px, 52vw);
-    left: auto; right: 4%; top: auto; bottom: 6%;
-    transform: none; opacity: 0.10;
+    width: min(560px, 94vw); height: min(560px, 94vw);
+    left: 50%; top: 50%; transform: translate(-50%, -50%);
+    opacity: 0.10;
   }
 }
 
