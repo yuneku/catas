@@ -673,14 +673,16 @@ button[data-variant="pills"][aria-checked="true"] {
 }
 
 /* ---------- 26 · MARCA DE AGUA SUTIL (contorno del personaje) ---------- */
-/* Fijo detrás del contenido, tenue pero perceptible, sin interceptar clics. */
+/* Capa superior (z-index alto) pero con opacity baja + pointer-events:none:
+   se ve como sello de agua sutil por encima del contenido SIN bloquear clics
+   ni molestar (las líneas del contorno son finas). */
 .marca-agua {
   position: fixed; top: 50%; left: 45%;
   transform: translate(-50%, -50%);
   width: min(640px, 88vw); height: min(640px, 88vw);
   background-size: contain; background-repeat: no-repeat;
-  background-position: center; opacity: 0.2;
-  z-index: 0; pointer-events: none;
+  background-position: center; opacity: 0.14;
+  z-index: 9999; pointer-events: none;
 }
 
     </style>""", unsafe_allow_html=True)
