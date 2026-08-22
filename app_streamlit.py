@@ -4008,10 +4008,8 @@ def seccion_inicio(datos: dict, logueado: bool):
     avatar_b64 = _asset_b64("inicio_avatar.jpg")
 
     intro = (
-        "Tu registro de catas con calificaciones, rankings y una comunidad "
-        "que comparte su criterio." if logueado else
-        "Registra catas, puntúalas y descubre rankings de la comunidad. "
-        "Inicia sesión para votar, o explora primero como invitado.")
+        "Encuentra, mira y evalúa materiales de todas las granjas. "
+        "Localiza sitios donde encontrarlos (Asociaciones, Coffeeshops…)")
 
     # ---- HERO: imagen de fondo + overlay degradado para legibilidad ----
     estilo_img = (f"background:url('{hero_b64}') center/cover no-repeat;"
