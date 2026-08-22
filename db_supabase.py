@@ -205,6 +205,43 @@ def cargar_datos() -> dict:
         _devolver(conn)
 
 
+def cargar_fotos_b64(tabla: str, ids) -> dict:
+    """Carga foto_b64 SOLO de las entidades pedidas (Paso 5 auditoría:
+    las fotos no viajan en el SELECT base; se piden bajo demanda).
+
+    tabla: 'catas' | 'productores' | 'coffeeshops'. ids: iterable de ids.
+    Devuelve {id: foto_b64} solo para las que tienen foto ('' las omite).
+    """
+    ids = [str(i) for i in (ids or []) if i]
+    if not ids:
+        return {}
+    if tabla not in ("catas", "productores", "coffeeshops"):
+        return {}
+    conn = _conectar()
+    if conn is None:
+        return {}
+    try:
+        cur = conn.cursor()
+        out = {}
+        # Lotes de 200 para no exceder el límite de parámetros del pooler
+        for i in range(0, len(ids), 200):
+            lote = ids[i:i + 200]
+            cur.execute(
+                f"SELECT id, foto_b64 FROM {tabla} WHERE id = ANY(%s) "
+                f"AND foto_b64 IS NOT NULL AND foto_b64 <> ''",
+                (lote,))
+            for eid, b64 in cur.fetchall():
+                if b64:
+                    out[str(eid)] = b64
+        cur.close()
+        return out
+    except Exception as e:
+        print(f"[db_supabase] ⚠️ Error cargando fotos de {tabla}: {e}")
+        return {}
+    finally:
+        _devolver(conn)
+
+
 def _leer_desde(conn) -> dict:
     cur = conn.cursor()
     cur.execute("SELECT id, nombre, password_hash, es_confianza, es_admin "
@@ -213,23 +250,18 @@ def _leer_desde(conn) -> dict:
         ["id", "nombre", "password_hash", "es_confianza", "es_admin"], row)))
         for row in cur.fetchall()]
 
-    cur.execute("SELECT id, nombre, foto, pais, foto_b64 FROM productores")
+    cur.execute("SELECT id, nombre, foto, pais FROM productores")
     productores = []
     for row in cur.fetchall():
-        p = dict(zip(["id", "nombre", "foto", "pais", "foto_b64"], row))
-        if not p.get("foto_b64"):
-            p.pop("foto_b64", None)
+        p = dict(zip(["id", "nombre", "foto", "pais"], row))
         productores.append(_filtrar_nulos(p))
 
     cur.execute("SELECT id, fecha, nombre, productor, tipo, comentarios, "
-                "pais, foto, anio, temporada, foto_b64 FROM catas")
+                "pais, foto, anio, temporada FROM catas")
     catas = []
     for row in cur.fetchall():
         c = dict(zip(["id", "fecha", "nombre", "productor", "tipo",
-                      "comentarios", "pais", "foto", "anio", "temporada",
-                      "foto_b64"], row))
-        if not c.get("foto_b64"):
-            c.pop("foto_b64", None)
+                      "comentarios", "pais", "foto", "anio", "temporada"], row))
         c["votos"] = []
         c["comentarios_usuarios"] = []
         catas.append(_filtrar_nulos(c))
@@ -269,14 +301,12 @@ def _leer_desde(conn) -> dict:
                 for row in cur.fetchall()]
 
     cur.execute("SELECT id, nombre, pais_id, ciudad_id, direccion, biografia, "
-                "creado, foto_b64 FROM coffeeshops ORDER BY nombre")
+                "creado FROM coffeeshops ORDER BY nombre")
     coffeeshops = []
     cs_por_id = {}
     for row in cur.fetchall():
         cs = dict(zip(["id", "nombre", "pais_id", "ciudad_id", "direccion",
-                       "biografia", "creado", "foto_b64"], row))
-        if not cs.get("foto_b64"):
-            cs.pop("foto_b64", None)
+                       "biografia", "creado"], row))
         cs["votos"] = []
         cs["productores"] = []
         coffeeshops.append(_filtrar_nulos(cs))

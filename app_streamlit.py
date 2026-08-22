@@ -171,6 +171,10 @@ def guardar(datos: dict) -> bool:
                 return False
             time.sleep(0.8)
     cargar.clear()  # el próximo rerun relee del disco (nunca datos stale)
+    try:
+        _fotos_b64_batch.clear()  # Paso 5: fotos nuevas al instante
+    except Exception:
+        pass
     return True
 
 
@@ -737,6 +741,51 @@ def mostrar_foto(foto: str, width: int = 120, emoji: str = "🌿", b64: str = ""
                     f"align-items:center;justify-content:center;color:#5A6472'>"
                     f"{emoji}</div>",
                     unsafe_allow_html=True)
+
+
+@st.cache_data(show_spinner=False, ttl=120)
+def _fotos_b64_batch(tabla: str, ids_tupla: tuple) -> dict:
+    """Carga foto_b64 de un lote de entidades (Paso 5 auditoría: bajo demanda).
+    Cacheada 2 min; cargar.clear() la invalida al guardar."""
+    if not ids_tupla:
+        return {}
+    try:
+        import db_supabase as _db
+        if not _db.activo():
+            return {}
+        return _db.cargar_fotos_b64(tabla, list(ids_tupla))
+    except Exception as e:
+        print(f"[fotos] ⚠️ no se pudieron cargar fotos de {tabla}: {e}")
+        return {}
+
+
+def _asegurar_fotos(datos: dict, tabla: str, ids) -> None:
+    """Inyecta foto_b64 en las entidades del dict que aún no la tienen.
+    Los renders existentes (cata.get('foto_b64','')) siguen funcionando sin
+    cambios: las fotos se piden a la BD SOLO cuando una sección las necesita."""
+    if not datos or not ids:
+        return
+    faltan = [str(i) for i in ids if i]
+    if not faltan:
+        return
+    try:
+        import db_supabase as _db
+        if not _db.activo():
+            return
+    except Exception:
+        return
+    # Entidades del dict sin foto_b64 todavía
+    entidades = datos.get(tabla, [])
+    por_id = {str(e.get("id")): e for e in entidades if isinstance(e, dict)}
+    pedir = [i for i in faltan
+             if i in por_id and not por_id[i].get("foto_b64")]
+    if not pedir:
+        return
+    b64s = _fotos_b64_batch(tabla, tuple(sorted(set(pedir))))
+    for eid, b64 in b64s.items():
+        ent = por_id.get(str(eid))
+        if ent is not None and b64:
+            ent["foto_b64"] = b64
 
 
 def foto_b64_productor(datos: dict, nombre: str) -> str:
@@ -1918,6 +1967,9 @@ def lista_por_votar(datos: dict, perfil: dict, perfil_id: str):
     n_max = st.session_state.get("pv_n", 12)
     mostrar = pendientes[:n_max]
 
+    # Paso 5 auditoría: fotos bajo demanda (solo las de esta página)
+    _asegurar_fotos(datos, "catas", [c["id"] for c in mostrar])
+
     # Grid responsive 3-2-1 (misma regla CSS que el Catálogo)
     with st.container(key="grid_por_votar"):
         for i in range(0, len(mostrar), 3):
@@ -2297,6 +2349,14 @@ def _catalogo_grid(datos: dict, admin: bool):
     n_max = st.session_state.get("cat_n", 12)
     mostrar = lista[:n_max]
 
+    # Paso 5 auditoría: fotos bajo demanda (solo las de esta página)
+    _asegurar_fotos(datos, "catas", [c["id"] for c in mostrar])
+    _prod_por_nombre = {str(p.get("nombre", "")).strip(): p.get("id")
+                        for p in datos.get("productores", [])}
+    _asegurar_fotos(datos, "productores",
+                    [_prod_por_nombre.get(str(c.get("productor", "")).strip())
+                     for c in mostrar if c.get("productor")])
+
     # Grid de tarjetas: 3 por fila en desktop (CSS: 2 en tablets, 1 en móvil)
     with st.container(key="grid_catalogo"):
         for i in range(0, len(mostrar), 3):
@@ -2390,6 +2450,12 @@ def ficha_premium(datos: dict, cata: dict):
     puede_votar = perfil is not None
     media = core.nota_media(cata)
     n_votos = len(core.votos_validos(cata))
+    # Paso 5 auditoría: fotos bajo demanda (solo las de esta ficha)
+    _asegurar_fotos(datos, "catas", [cata.get("id")])
+    _asegurar_fotos(datos, "productores",
+                    [p.get("id") for p in datos.get("productores", [])
+                     if str(p.get("nombre", "")).strip()
+                     == str(cata.get("productor", "")).strip()])
     nombre = _html.escape(str(cata.get("nombre", "—")))
     productor = _html.escape(str(cata.get("productor", "") or "—"))
     color_nota = core.color_nota(media / 10)
@@ -2796,6 +2862,9 @@ def seccion_productores(datos: dict):
         st.info("Todavía no hay productores.")
         return
 
+    # Paso 5 auditoría: fotos bajo demanda (solo las de esta sección)
+    _asegurar_fotos(datos, "productores", [p.get("id") for p in datos["productores"]])
+
     prod_ficha = st.session_state.get("prod_ficha")
     for prod in list(datos["productores"]):
         _tarjeta_productor(datos, prod, admin, prod_ficha)
@@ -3036,6 +3105,15 @@ def seccion_rankings(datos: dict):
 
     tab_general, tab_personal, tab_confianza = st.tabs(
         ["🌍 Top General", "👤 Top Personal", "🧑🔬 Top Confianza"])
+
+    # Paso 5 auditoría: fotos bajo demanda (solo las catas del ranking)
+    _lista_base = filtrar()
+    _asegurar_fotos(datos, "catas", [c["id"] for c in _lista_base])
+    _asegurar_fotos(datos, "productores",
+                    [p.get("id") for p in datos.get("productores", [])
+                     if str(p.get("nombre", "")).strip() in
+                     {str(c.get("productor", "")).strip()
+                      for c in _lista_base if c.get("productor")}])
 
     # ---------------- Top General ----------------
     with tab_general:
@@ -3999,6 +4077,9 @@ def seccion_asociaciones(datos: dict):
         locales = [c for c in locales if c.get("ciudad_id") == ciudad_id]
     locales = sorted(locales,
                      key=lambda c: -core.nota_media_coffeeshop(c))
+
+    # Paso 5 auditoría: fotos bajo demanda (solo las de esta sección)
+    _asegurar_fotos(datos, "coffeeshops", [c.get("id") for c in locales])
 
     modo_ranking = (filtro_pais == "Todos" and filtro_ciudad == "Todas")
 
