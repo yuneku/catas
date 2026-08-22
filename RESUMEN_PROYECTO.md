@@ -408,3 +408,10 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   en el fondo de Catálogo, avatar/favicon/logo del personaje en sidebar-hero-pestaña.
   QA 8/8. Desplegado: fondo+watermark e3c8cb5/5787281, fix nube e4e9913, contorno
   bf175e9.
+      en el fondo de Catálogo, avatar/favicon/logo del personaje en sidebar-hero-pestaña.
+      QA 8/8. ADAPTACIÓN MÓVIL de la marca de agua (940778d): en pantallas <=768px el
+      contorno se hace más pequeño (min(230px,52vw)) y se reposiciona a la esquina
+      inferior-derecha (right:4%, top:82%, opacity 0.10) para que el sello no compita
+      con las tarjetas a ancho completo (en escritorio queda centrado y grande, que es
+      donde lucía). Verificado en móvil (vw 390): contenido limpio, contorno en esquina.
+
