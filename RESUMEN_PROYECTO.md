@@ -345,3 +345,13 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   vw=391, mainW=391 (contenido a ancho completo), filtros Tipo/País apilados en
   2 líneas, tarjetas del grid apiladas verticalmente (1 columna), botón ☰ Menú
   visible a full-width. QA AppTest 9/9. Desplegado en 812545a.
+- **DEGRADADO CÓSMICO EN GRÁFICOS + GLOW EN TÍTULOS (ago 2026)**: se añadió
+  matplotlib (a requirements) y la función `_chart_actividad` que dibuja el chart
+  de actividad de Evolución con un degradado sutil verde→violeta (años más
+  recientes más violeta, referencia del personaje; ej. 2022-24 en verde →
+  2025-26 en violeta). Títulos de sección (h2) con glow violeta sutil
+  (`text-shadow: rgba(126,90,224,0.25)` manteniendo la barra verde). Import de
+  matplotlib LAZY con fallback (si no está, el chart usa la vía nativa → no rompe
+  la nube). Verificado en producción: haySVG=true, tituloShadow
+  rgba(126,90,224,0.25), y en la captura se ve el degradado verde→violeta.
+  QA AppTest 9/9. Desplegado en 4283cc8 (app + requirements).
