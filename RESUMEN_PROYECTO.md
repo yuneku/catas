@@ -324,3 +324,13 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   que antes heredaban el borde gris por defecto de Streamlit (leía como "post de foro").
   Revisadas visualmente también login y perfiles (professionales). QA AppTest 7/7.
   Desplegado en 40ecbb3.
+- **ASOCIACIONES MODERNIZADA (ago 2026)**: la tarjeta de coffeeshop usaba colores
+  duros de "foro" (pills azules #8AB4F8 sobre #1B2230, crema #E8E6E1) que
+  desentonaban del sistema verde. Se modernizó: pills de productores en VERDE
+  NEÓN (rgba(74,222,128) + borde, coherente con el resto de chips), nota con
+  color semántico (color_nota), jerarquía de nombre clara, ubicación legible,
+  clase .cs-card con degradado oscuro + hover verde + elevación, y más
+  compacta (min-height 250→210). Verificada visualmente en producción junto a
+  Catálogo/ficha/login/Rankings/Evolución: lenguaje visual unificado. QA AppTest
+  10/10 (todas las secciones + ficha producto + ficha coffeeshop). Desplegado
+  en f1a6c2b.
