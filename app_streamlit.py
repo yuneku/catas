@@ -580,14 +580,27 @@ button[data-variant="pills"][aria-checked="true"] {
 [class*="st-key-rk_lista"] [data-testid="stVerticalBlockBorderWrapper"],
 [class*="st-key-grid_catalogo"] [data-testid="stVerticalBlockBorderWrapper"],
 [class*="st-key-grid_por_votar"] [data-testid="stVerticalBlockBorderWrapper"] {
-  background: #141920; border: 1px solid #242C37; border-radius: 14px; padding: 0.45rem 0.6rem;
+  background: linear-gradient(180deg, #151B24, #131820); border: 1px solid #242C37;
+  border-radius: 14px; padding: 0.5rem 0.65rem;
+}
+[class*="st-key-rk_lista"] [data-testid="stVerticalBlockBorderWrapper"]:hover {
+  border-color: rgba(74,222,128,0.35);
 }
 [class*="st-key-rk_lista"] [data-testid="stCaptionContainer"] p { color: #A5AEB8 !important; font-size: 12.5px; }
 [class*="st-key-rk_lista"] [data-testid="column"] img { border-radius: 10px; }
 [class*="st-key-rk_lista"] [data-testid="column"]:last-child { text-align: right; }
-[class*="st-key-rk_lista"] [class*="st-key-abrir_rk"] button { min-height: 40px; }
+/* Botón 'Ver' compacto e integrado (borde verde, radio pill, menos 'gris genérico') */
+[class*="st-key-rk_lista"] [class*="st-key-abrir_rk"] button {
+  min-height: 38px; border-radius: 10px;
+  border: 1px solid rgba(74,222,128,0.35) !important;
+  background: rgba(74,222,128,0.08) !important; color: #8BE9B0 !important;
+  font-weight: 600; font-size: 13.5px;
+}
+[class*="st-key-rk_lista"] [class*="st-key-abrir_rk"] button:hover {
+  background: rgba(74,222,128,0.16) !important; border-color: #4ADE80 !important;
+}
 @media (max-width: 768px) {
-  [class*="st-key-rk_lista"] [data-testid="stVerticalBlockBorderWrapper"] { padding: 0.3rem 0.45rem; }
+  [class*="st-key-rk_lista"] [data-testid="stVerticalBlockBorderWrapper"] { padding: 0.35rem 0.5rem; }
   [class*="st-key-rk_lista"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; }
   [class*="st-key-rk_lista"] [data-testid="stHorizontalBlock"] > [data-testid="column"]:last-child {
     flex: 1 0 100% !important; min-width: 100% !important;
@@ -2977,9 +2990,9 @@ def fila_ranking(cata: dict, pos: int = None, datos: dict = None,
                 st.markdown(placeholder_imagen(64, "🌿", radius=8),
                             unsafe_allow_html=True)
         with c_info:
+            # Nombre más destacado (con medalla si hay posición)
             st.markdown(f"**{nombre}**")
-            st.caption(f"🏭 {productor} · {n_votos} voto"
-                       f"{'s' if n_votos != 1 else ''}")
+            st.caption(f"🏭 {productor} · {n_votos} voto{'s' if n_votos != 1 else ''}")
             st.markdown(" ".join(chips_row), unsafe_allow_html=True)
         with c_nota:
             # HTML en UNA SOLA LÍNEA (evita HTML en crudo)
