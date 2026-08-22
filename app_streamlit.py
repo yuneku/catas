@@ -262,15 +262,21 @@ button, input, textarea, select, label {
   font-family: 'Plus Jakarta Sans', -apple-system, 'Segoe UI', Roboto, sans-serif !important;
 }
 
-/* Fondo: profundidad cósmica — verde neón (aura del personaje) + violeta
-   galaxia + cristales morados, sobre oscuro casi negro. */
+/* Fondo inspirado en la referencia: degradado radial difuso muy sutil —
+   glow verde en la esquina SUPERIOR-IZQUIERDA, negro profundo al centro,
+   glow violeta/morado en la esquina INFERIOR-DERECHA. Tonos tenues que no
+   molestan (los muestreos de la imagen: verde rgb(14,53,35), negro #020514,
+   violeta #26103f). */
 [data-testid="stAppViewContainer"] {
   background:
-    radial-gradient(1250px 680px at 12% -10%, rgba(74,222,128,0.13), transparent 55%),
-    radial-gradient(1050px 640px at 108% -8%, rgba(126,90,224,0.16), transparent 52%),
-    radial-gradient(900px 520px at 85% 108%, rgba(88,60,164,0.12), transparent 58%),
-    radial-gradient(700px 420px at 6% 70%, rgba(74,222,128,0.06), transparent 60%),
-    linear-gradient(180deg, #0B0F17 0%, #0A0D16 100%);
+    /* verde tenue arriba-izquierda (borde superior) */
+    radial-gradient(55% 55% at 12% -6%, rgba(20,72,52,0.32), transparent 62%),
+    /* violeta tenue abajo-derecha */
+    radial-gradient(60% 60% at 96% 104%, rgba(64,32,108,0.30), transparent 64%),
+    /* toque verde muy tenue en la zona superior */
+    radial-gradient(40% 40% at 45% 0%, rgba(16,60,44,0.14), transparent 60%),
+    /* base negro profundo */
+    linear-gradient(180deg, #04060f 0%, #030510 55%, #05060f 100%);
 }
 
 [data-testid="stAppViewContainer"] > .main { background: transparent; }
@@ -666,7 +672,28 @@ button[data-variant="pills"][aria-checked="true"] {
   border-color: rgba(74,222,128,0.45) !important;
 }
 
+/* ---------- 26 · MARCA DE AGUA SUTIL (logo del personaje) ---------- */
+/* Div fijo detrás del contenido, muy tenue, que no molesta ni intercepta clics. */
+.marca-agua {
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, 80vw); height: min(520px, 80vw);
+  background-size: contain; background-repeat: no-repeat;
+  background-position: center; opacity: 0.05;
+  z-index: 0; pointer-events: none;
+}
+
     </style>""", unsafe_allow_html=True)
+
+
+def _inyectar_marca_agua():
+    """Marca de agua sutil con el logo del personaje, fija y detrás del contenido.
+    No intercepta clics (pointer-events:none) y se ve muy tenue (opacity 0.05)."""
+    wm_b64 = _asset_b64("watermark_circle.png")
+    if not wm_b64:
+        return
+    st.html(
+        f'<div class="marca-agua" style="background-image:url(\'{wm_b64}\')"></div>')
 
 
 def mostrar_foto(foto: str, width: int = 120, emoji: str = "🌿", b64: str = ""):
@@ -4194,6 +4221,7 @@ def main():
     # Sesión persistente: cookie válida → entrar sin formularios
     _auto_login_cookie(datos)
     inyectar_css()  # UI mobile-first (solo vista; no toca la lógica de datos)
+    _inyectar_marca_agua()  # marca de agua sutil con el logo del personaje
     logueado = bool(st.session_state.get("usuario"))
 
     # Invitado que pulsó "Iniciar sesión" -> pantalla de acceso
