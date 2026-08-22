@@ -2966,7 +2966,8 @@ def fila_ranking(cata: dict, pos: int = None, datos: dict = None,
     productor = _html.escape(str(cata.get("productor", "") or "—"))
     if pos:
         medallas = {1: "🥇", 2: "🥈", 3: "🥉"}
-        nombre = f"{medallas.get(pos, '')} {pos}º · {nombre}"
+        pos_txt = f"{medallas.get(pos, '')} {pos}º".strip()  # sin espacio inicial
+        nombre = f"{pos_txt} · {nombre}"
     color_nota = core.color_nota(media / 10)
 
     # Chips compactos: tipo / país / año
@@ -2990,8 +2991,12 @@ def fila_ranking(cata: dict, pos: int = None, datos: dict = None,
                 st.markdown(placeholder_imagen(64, "🌿", radius=8),
                             unsafe_allow_html=True)
         with c_info:
-            # Nombre más destacado (con medalla si hay posición)
-            st.markdown(f"**{nombre}**")
+            # Nombre más destacado (con medalla si hay posición). Negrita HTML
+            # en vez de markdown `**` — más robusto con caracteres tipo º/·/emoji.
+            st.markdown(
+                f'<span style="font-weight:700;font-size:15px;color:#F2F5F9;'
+                f'line-height:1.25">{_html.escape(nombre)}</span>',
+                unsafe_allow_html=True)
             st.caption(f"🏭 {productor} · {n_votos} voto{'s' if n_votos != 1 else ''}")
             st.markdown(" ".join(chips_row), unsafe_allow_html=True)
         with c_nota:
