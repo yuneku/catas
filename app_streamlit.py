@@ -1223,8 +1223,21 @@ def hero(datos: dict, logueado: bool):
 
 def sidebar(datos: dict):
     with st.sidebar:
-        st.markdown("## 🌿 TerpsXHunter")
-        st.caption("registro & rankings · web")
+        # Cabecera de marca: logo pequeño del personaje + nombre (sin subtítulo)
+        logo_b64 = _asset_b64("inicio_avatar.jpg")
+        if logo_b64:
+            st.markdown(
+                f'<div style="display:flex;align-items:center;gap:0.6rem;'
+                f'margin:0.2rem 0 0.35rem">'
+                f'<img src="{logo_b64}" alt="" style="width:40px;height:40px;'
+                f'border-radius:12px;object-fit:cover;border:2px solid '
+                f'rgba(126,90,224,0.55);box-shadow:0 3px 10px rgba(0,0,0,0.4)">'
+                f'<span style="font-size:1.15rem;font-weight:800;color:#F2F5F9;'
+                f'letter-spacing:-0.02em;">🌿 TerpsXHunter</span>'
+                f'</div>',
+                unsafe_allow_html=True)
+        else:
+            st.markdown("## 🌿 TerpsXHunter")
 
         # ---- Estado de datos (diagnóstico de conexión) ----
         if core._db_nube() is not None:
