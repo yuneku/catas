@@ -392,8 +392,13 @@ footer { visibility: hidden; }
 }
 
 /* ---------- 6 · SLIDERS TÁCTILES ---------- */
-[data-testid="stSlider"] [role="slider"] { width: 24px !important; height: 24px !important; margin-top: -12px !important; }
-[data-testid="stSlider"] [data-baseweb="slider"] > div > div { height: 6px; }
+[data-testid="stSlider"] [role="slider"] { width: 26px !important; height: 26px !important; margin-top: -13px !important; }
+[data-testid="stSlider"] [data-baseweb="slider"] > div > div { height: 7px; }
+/* La etiqueta del valor (número sobre el slider) con más presencia */
+[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"] ~ div,
+[data-testid="stSlider"] [data-testid="stSliderThumbValue"] { font-weight: 700; }
+/* Sliders dentro de un form de votación: label en negrita para legibilidad */
+[data-testid="stSlider"] label p { font-weight: 600; }
 
 /* ---------- 7 · RADIO TÁCTIL (fuera del sidebar, p. ej. filtros) ---------- */
 [data-testid="stRadio"] label { padding: 0.55rem 0.4rem; font-size: 15px; border-radius: 8px; }
@@ -519,13 +524,22 @@ button[data-variant="pills"][aria-checked="true"] {
 .st-key-pv_nota_guardar { position: sticky; bottom: 0.5rem; z-index: 998; }
 @media (max-width: 768px) {
   .st-key-pv_nota_guardar {
-    background: rgba(10, 14, 20, 0.92); backdrop-filter: blur(6px);
-    padding: 0.4rem 0.5rem; border-radius: 12px;
+    background: rgba(10, 14, 20, 0.94); backdrop-filter: blur(6px);
+    padding: 0.5rem 0.6rem; border-radius: 14px;
+    border: 1px solid rgba(74,222,128,0.18);
     box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.55);
   }
+  .st-key-pv_nota_guardar [data-testid="stVerticalBlock"] { gap: 0.4rem; }
+  .st-key-pv_nota_guardar [data-testid="stVerticalBlock"] > [data-testid="stMarkdownContainer"],
+  .st-key-pv_nota_guardar [data-testid="stVerticalBlock"] > [data-testid="element-container"] { margin-bottom: 0; }
 }
 .st-key-btn_guardar_voto { position: sticky; bottom: 0.5rem; z-index: 999; }
 .st-key-btn_guardar_voto button { box-shadow: 0 -6px 18px rgba(0,0,0,.55); }
+/* Botones del form de votación apilados a full-width en móvil */
+@media (max-width: 768px) {
+  .st-key-pv_nota_guardar [data-testid="stHorizontalBlock"]:has(button) { flex-wrap: wrap; }
+  .st-key-pv_nota_guardar [data-testid="stHorizontalBlock"]:has(button) > [data-testid="column"] { min-width: 100% !important; }
+}
 
 /* ---------- 19 · FICHA DE PRODUCTO (2 columnas; colapsa en móvil) ---------- */
 [class*="st-key-ficha_detalle"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap; }
@@ -876,10 +890,20 @@ def render_sliders_blocks(voto_precargar=None, prefijo: str = ""):
                         scores_bloque[clave] = st.slider(
                             etiqueta, min_value=1, max_value=100, value=valor_inicial,
                             step=1, key=key) / 10.0
-            # Nota del bloque (sobre 100), en vivo
+            # Nota del bloque (sobre 100), en vivo — con color semántico (verde/amarillo/rojo)
             nota10 = core.calcular_nota_bloque(scores_bloque, meta["clave"])
-            st.caption(f"📊 {meta['titulo']} · {int(meta['peso'] * 100)}% — "
-                       f"**{nota10 * 10:.0f} / 100**")
+            nota100 = nota10 * 10
+            color_bloque = core.color_nota(nota10)
+            st.markdown(
+                f'<div style="display:flex;align-items:center;justify-content:space-between;'
+                f'margin:4px 0 8px;padding:10px 14px;border-radius:12px;'
+                f'background:linear-gradient(180deg,#171D27,#141920);border:1px solid #242C37">'
+                f'<span style="font-size:13px;color:#A5AEB8;font-weight:600">'
+                f'{_html.escape(meta["titulo"])} · {int(meta["peso"] * 100)}%</span>'
+                f'<span style="font-size:20px;font-weight:800;color:{color_bloque}">'
+                f'{nota100:.0f}<span style="font-size:11px;color:#7A8391;font-weight:600">/100</span>'
+                f'</span></div>',
+                unsafe_allow_html=True)
             scores[meta["clave"]] = scores_bloque
     if voto_precargar is not None:
         st.session_state[flag_pre] = True  # precarga aplicada: no volver a resetear
@@ -1982,9 +2006,27 @@ def formulario_voto(datos: dict, cata: dict, perfil: dict, perfil_id: str):
         # submit). Mover sliders no dispara recargas: eso es lo que ahorra.
         scores = obtener_scores_actuales(prefijo_pv)
         _, nota_final10 = core.calcular_notas(scores)
+        nota_final = nota_final10 * 10
+        color_nota = core.color_nota(nota_final10)
         with st.container(key="pv_nota_guardar"):
-            st.metric("💛 Tu nota", f"{nota_final10 * 10:.1f} / 100",
-                      help="Pulsa '👁 Ver mi nota' para recalcularla")
+            # Nota final con color semántico + barra de progreso (más intuitiva)
+            st.markdown(
+                f'<div style="padding:14px 16px;border-radius:14px;'
+                f'background:linear-gradient(180deg,#171D27,#141920);'
+                f'border:1px solid {color_nota}55;margin-bottom:10px">'
+                f'<div style="display:flex;align-items:baseline;justify-content:space-between;'
+                f'margin-bottom:8px">'
+                f'<span style="font-size:12px;color:#A5AEB8;font-weight:700;'
+                f'letter-spacing:0.4px">💛 TU NOTA FINAL</span>'
+                f'<span style="font-size:30px;font-weight:800;color:{color_nota};'
+                f'line-height:1">{nota_final:.1f}'
+                f'<span style="font-size:12px;color:#7A8391;font-weight:600">/100</span>'
+                f'</span></div>'
+                f'<div style="height:6px;border-radius:99px;background:#1B2129;overflow:hidden">'
+                f'<div style="height:100%;width:{nota_final:.0f}%;'
+                f'background:linear-gradient(90deg,{color_nota},{color_nota});'
+                f'border-radius:99px;transition:width .3s ease"></div></div></div>',
+                unsafe_allow_html=True)
             c1, c2 = st.columns([2, 1])
             with c1:
                 ver_nota = st.form_submit_button("👁 Ver mi nota",
