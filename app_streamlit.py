@@ -78,7 +78,7 @@ core._avisar_error = lambda *args, **kwargs: st.error(
 
 st.set_page_config(
     page_title="TerpsXHunter",
-    page_icon="🌿",
+    page_icon="assets/favicon.png",
     layout="wide",
     initial_sidebar_state="collapsed",  # mobile-first: sidebar colapsado al abrir
 )
