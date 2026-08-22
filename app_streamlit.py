@@ -161,7 +161,9 @@ def guardar(datos: dict) -> bool:
         except Exception as e:
             intentos += 1
             if intentos >= 2:
-                st.toast(f"No se pudo guardar: {str(e)[:64]}", icon="⚠️")
+                print(f"[guardar] ⚠️ No se pudo guardar: {e}")
+                st.toast("⚠️ No se pudo guardar. Reintenta en unos segundos.",
+                         icon="⚠️")
                 return False
             time.sleep(0.8)
     cargar.clear()  # el próximo rerun relee del disco (nunca datos stale)
@@ -1623,7 +1625,8 @@ def _manejar_retorno_oauth(datos: dict):
     try:
         info = _intercambiar_codigo_google(str(code))
     except Exception as e:
-        st.error(f"⚠️ No se pudo completar el inicio con Google: {e}")
+        print(f"[oauth] ⚠️ No se pudo completar el inicio con Google: {e}")
+        st.error("⚠️ No se pudo completar el inicio con Google. Inténtalo de nuevo.")
         return
     email = str(info.get("email", "") or "").strip()
     sub = str(info.get("sub", "") or "").strip()
@@ -1723,13 +1726,20 @@ def pantalla_login(datos: dict):
                "Crea una abajo (solo nombre y contraseña).")
 
     # ---- Login (con autocompletado nativo del navegador) ----
+    # La reclamación de cuenta (perfil sin contraseña) se despliega SOLO si se
+    # activa el toggle: así el campo de confirmación no ocupa espacio en el
+    # flujo normal de acceso.
+    reclamar = st.toggle("🔑 Reclamar cuenta sin contraseña", value=False)
     with st.form("login"):
         l_nombre = st.text_input("Nombre de usuario", autocomplete="username")
         l_pw = st.text_input("Contraseña", type="password",
-                             autocomplete="current-password")
-        l_pw_conf = st.text_input("Confirmar contraseña (solo para reclamar cuenta)",
-                                  type="password",
-                                  autocomplete="new-password")
+                             autocomplete="new-password" if reclamar
+                             else "current-password")
+        if reclamar:
+            l_pw_conf = st.text_input("Confirmar contraseña", type="password",
+                                      autocomplete="new-password")
+        else:
+            l_pw_conf = ""
         l_recordar = st.checkbox("🔒 Recordarme en este dispositivo", value=True)
         entrar = st.form_submit_button("🔓 Entrar", type="primary",
                                        width="stretch")
@@ -1756,7 +1766,9 @@ def pantalla_login(datos: dict):
             st.rerun()
 
         # ---- Rama de reclamación de cuenta (perfil sin password_hash) ----
-        if perfil is not None and not perfil.get("password_hash"):
+        # Solo aplica si el toggle está activo: en el login normal no se puede
+        # reclamar (el campo de confirmación ni siquiera existe).
+        if reclamar and perfil is not None and not perfil.get("password_hash"):
             if l_pw and l_pw == l_pw_conf:
                 _login_exito(estado)
                 perfil["password_hash"] = hash_password(l_pw)
@@ -4353,24 +4365,35 @@ def main():
     # (seccion_inicio usa su propio banner grande). El resto de secciones
     # arrancan directamente con su título, sin la banda compacta.
 
-    if pagina == "🏠 Inicio":
-        seccion_inicio(datos, logueado)
-    elif pagina == "📦 Catálogo":
-        seccion_catalogo(datos)
-    elif pagina == "➕ Nueva Cata":
-        seccion_nueva_cata(datos)
-    elif pagina == "🎯 Por votar":
-        seccion_por_votar(datos)
-    elif pagina == "🏭 Productores":
-        seccion_productores(datos)
-    elif pagina == "🏆 Rankings":
-        seccion_rankings(datos)
-    elif pagina == "📈 Evolución":
-        seccion_evolucion(datos)
-    elif pagina == "🏪 Asociaciones":
-        seccion_asociaciones(datos)
-    else:
-        seccion_perfiles(datos)
+    # ---- Handler global de errores (auditoría S3) ----
+    # Cualquier excepción en una sección se LOGUEA completo en la consola del
+    # servidor (el admin la ve) pero al usuario solo llega un mensaje amigable,
+    # SIN traceback, rutas ni valores internos.
+    try:
+        if pagina == "🏠 Inicio":
+            seccion_inicio(datos, logueado)
+        elif pagina == "📦 Catálogo":
+            seccion_catalogo(datos)
+        elif pagina == "➕ Nueva Cata":
+            seccion_nueva_cata(datos)
+        elif pagina == "🎯 Por votar":
+            seccion_por_votar(datos)
+        elif pagina == "🏭 Productores":
+            seccion_productores(datos)
+        elif pagina == "🏆 Rankings":
+            seccion_rankings(datos)
+        elif pagina == "📈 Evolución":
+            seccion_evolucion(datos)
+        elif pagina == "🏪 Asociaciones":
+            seccion_asociaciones(datos)
+        else:
+            seccion_perfiles(datos)
+    except Exception as _e:
+        import traceback as _tb
+        _tb.print_exc()  # log completo en consola (visible solo para el admin)
+        st.error("⚠️ Ocurrió un error inesperado en esta sección. "
+                 "Recarga la página e inténtalo de nuevo; si persiste, "
+                 "avísale al administrador.")
 
 
 if __name__ == "__main__":
