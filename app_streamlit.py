@@ -836,38 +836,38 @@ def foto_base64(ruta: str, px: int = 76, radius: int = 10, b64: str = "") -> str
     except OSError:
         return ""
     try:
-        return _foto_base64_cached(ruta, px, radius, mtime)
+        return _foto_archivo_cached(ruta, px, radius, mtime, fluid=False)
     except Exception:
         return ""
 
 
-# Memoización de thumbnails b64 (modo nube): (md5, px, radius) -> thumb ligero.
+# Memoización de thumbnails b64 (modo nube): (md5, px, cuadrado) -> thumb ligero.
 _THUMBS = {}
 _THUMBS_MAX = 600  # defensa: si crece demasiado, se vacía (se regenera solo)
 
 
 def _foto_b64_thumb(b64: str, px: int = 84, radius: int = 10) -> str:
     """Thumbnail cuadrado ligero desde un b64 de la BD (recorte central,
-    JPEG q80). Memoizado por (md5, px, radius): se genera una sola vez."""
-    if not b64:
-        return ""
-    clave = (hashlib.md5(b64.encode("utf-8")).hexdigest(), px, radius)
-    if clave not in _THUMBS:
-        if len(_THUMBS) > _THUMBS_MAX:
-            _THUMBS.clear()
-        _THUMBS[clave] = _b64_a_jpeg(b64, px, cuadrado=True)
-    return _THUMBS[clave]
+    JPEG q80). Memoizado por (md5, px, cuadrado): se genera una sola vez."""
+    return _b64_a_jpeg_memo(b64, px, cuadrado=True)
 
 
 def _foto_b64_redim(b64: str, max_lado: int = 400) -> str:
     """Redimensiona un b64 a <= max_lado conservando aspecto (JPEG q80)."""
+    return _b64_a_jpeg_memo(b64, max_lado, cuadrado=False)
+
+
+def _b64_a_jpeg_memo(b64: str, px: int, cuadrado: bool) -> str:
+    """Helper único de thumbnails b64 (DRY, Paso 6): memoiza por
+    (md5, px, cuadrado) y delega el procesado real a _b64_a_jpeg.
+    Cuadrado=True -> recorte central px×px; False -> escalado <= px."""
     if not b64:
         return ""
-    clave = (hashlib.md5(b64.encode("utf-8")).hexdigest(), max_lado, 0)
+    clave = (hashlib.md5(b64.encode("utf-8")).hexdigest(), px, cuadrado)
     if clave not in _THUMBS:
         if len(_THUMBS) > _THUMBS_MAX:
             _THUMBS.clear()
-        _THUMBS[clave] = _b64_a_jpeg(b64, max_lado, cuadrado=False)
+        _THUMBS[clave] = _b64_a_jpeg(b64, px, cuadrado)
     return _THUMBS[clave]
 
 
@@ -927,10 +927,12 @@ def _asset_b64(nombre: str) -> str:
 
 
 @st.cache_data(show_spinner=False)
-def _foto_base64_cached(ruta: str, px: int, radius: int, mtime: float) -> str:
+def _foto_archivo_cached(ruta: str, px: int, radius: int, mtime: float,
+                         fluid: bool) -> str:
     """PIL (abrir + recortar + redimensionar + JPEG) cacheado: la operación
     cara se hace una sola vez por foto. `mtime` invalida la caché si la
-    imagen cambia en disco (al subir una foto nueva)."""
+    imagen cambia en disco (al subir una foto nueva).
+    fluid=False -> img cuadrada px×px; fluid=True -> width:100% (podio)."""
     from PIL import Image
     img = Image.open(ruta).convert("RGB")
     w, h = img.size
@@ -941,6 +943,10 @@ def _foto_base64_cached(ruta: str, px: int, radius: int, mtime: float) -> str:
     buf = io.BytesIO()
     img.save(buf, "JPEG", quality=78)
     b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    if fluid:
+        return (f'<img src="data:image/jpeg;base64,{b64}" alt="" '
+                f'style="width:100%;aspect-ratio:1/1;object-fit:cover;'
+                f'border-radius:{radius}px;display:block">')
     return (f'<img src="data:image/jpeg;base64,{b64}" alt="" '
             f'style="width:{px}px;height:{px}px;border-radius:{radius}px;'
             f'object-fit:cover;display:block">')
@@ -962,28 +968,9 @@ def foto_base64_fluid(ruta: str, radius: int = 12, mtime: float = 0.0,
     except OSError:
         return ""
     try:
-        return _foto_base64_fluid_cached(ruta, radius, mtime)
+        return _foto_archivo_cached(ruta, 240, radius, mtime, fluid=True)
     except Exception:
         return ""
-
-
-@st.cache_data(show_spinner=False)
-def _foto_base64_fluid_cached(ruta: str, radius: int, mtime: float) -> str:
-    """Igual que _foto_base64_cached pero con width:100%: la imagen ocupa
-    TODO el ancho del contenedor (crítico en el podio responsive)."""
-    from PIL import Image
-    img = Image.open(ruta).convert("RGB")
-    w, h = img.size
-    lado = min(w, h)
-    img = img.crop(((w - lado) // 2, (h - lado) // 2,
-                    (w + lado) // 2, (h + lado) // 2))
-    img = img.resize((240, 240), Image.LANCZOS)
-    buf = io.BytesIO()
-    img.save(buf, "JPEG", quality=78)
-    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-    return (f'<img src="data:image/jpeg;base64,{b64}" alt="" '
-            f'style="width:100%;aspect-ratio:1/1;object-fit:cover;'
-            f'border-radius:{radius}px;display:block">')
 
 
 def placeholder_imagen(px: int = 76, emoji: str = "🌿", radius: int = 10) -> str:
