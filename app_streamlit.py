@@ -76,6 +76,10 @@ except ImportError as e:
 core._avisar_error = lambda *args, **kwargs: st.error(
     args[0] if args else "Error de datos")
 
+# Autenticación (Paso 3 auditoría): hash, tokens, cookies y OAuth viven en
+# auth.py (módulo desacoplado; no importa app_streamlit, no hay ciclos).
+import auth
+
 st.set_page_config(
     page_title="TerpsXHunter",
     page_icon="assets/favicon.png",
@@ -1396,214 +1400,23 @@ def es_profesional(datos: dict) -> bool:
     return es_admin(datos) or bool(perfil.get("es_confianza"))
 
 
-# -----------------------------------------------------------------------------
-# Autenticación (contraseñas con hash PBKDF2 + salt; nunca en claro)
-# -----------------------------------------------------------------------------
-
-def hash_password(contrasena: str) -> str:
-    """Devuelve 'salt$hash' (PBKDF2-SHA256, 100k iteraciones)."""
-    salt = secrets.token_hex(16)
-    h = hashlib.pbkdf2_hmac("sha256", contrasena.encode("utf-8"),
-                            salt.encode("utf-8"), 100_000).hex()
-    return f"{salt}${h}"
-
-
-def verificar_password(contrasena: str, hash_guardado: str) -> bool:
-    if not hash_guardado or "$" not in hash_guardado:
-        return False
-    salt, h = hash_guardado.split("$", 1)
-    calc = hashlib.pbkdf2_hmac("sha256", contrasena.encode("utf-8"),
-                               salt.encode("utf-8"), 100_000).hex()
-    return secrets.compare_digest(calc, h)
-
-
-def perfiles_sin_password(datos: dict) -> list:
-    """Perfiles antiguos que aún no tienen contraseña (se pueden reclamar)."""
-    return [p["nombre"] for p in datos["perfiles"] if not p.get("password_hash")]
-
-
-# =============================================================================
-# SESIÓN PERSISTENTE (cookie "recordar sesión") + GOOGLE OAUTH
-# Complementa al login tradicional (usuario/contraseña) SIN sustituirlo:
-#   - Cookie firmada HMAC-SHA256 con el secreto del servidor: un token no se
-#     puede forjar ni reutilizar tras su expiración (30 días).
-#   - Google OAuth 2.0 (Authorization Code + PKCE) contra Google directamente;
-#     la app NO usa Supabase Auth (solo Postgres), por eso el flujo es OAuth puro.
-# =============================================================================
-
-COOKIE_SESION = "terpsx_sesion"
-COOKIE_DIAS = 30
-GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
-GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
-GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
-
-
-def _secret_sesion() -> str:
-    """Secreto para firmar cookies: st.secrets['session']['secret'] o env."""
-    try:
-        s = getattr(st, "secrets", None)
-        if s is not None:
-            bloque = dict(s["session"]) if "session" in s else {}
-            if bloque.get("secret"):
-                return str(bloque["secret"]).strip()
-    except Exception:
-        pass
-    return os.environ.get("SESSION_SECRET", "").strip()
-
-
-def _crear_token_sesion(perfil_id: str) -> str:
-    """Token firmado (HMAC-SHA256) para la cookie 'recordar sesión'."""
-    return core.crear_token_sesion(perfil_id, _secret_sesion(), COOKIE_DIAS)
-
-
-def _verificar_token_sesion(token: str):
-    """Devuelve el perfil_id si el token es válido (firma + no expirado)."""
-    return core.verificar_token_sesion(token, _secret_sesion())
-
-
-def _base_url_app() -> str:
-    """URL base pública de la app (para el redirect_uri del OAuth)."""
-    try:
-        cabeceras = st.context.headers
-        host = cabeceras.get("Host") or cabeceras.get("host") or "localhost:8501"
-        proto = (cabeceras.get("X-Forwarded-Proto")
-                 or cabeceras.get("x-forwarded-proto") or "")
-        if not proto:
-            proto = "https" if "streamlit.app" in host else "http"
-        return f"{proto}://{host}"
-    except Exception:
-        return "http://localhost:8501"
-
-
-def _leer_cookie() -> str:
-    """Lee la cookie de sesión (vacío si no hay / librería no disponible)."""
-    if _COOKIES is None:
-        return ""
-    try:
-        valor = _COOKIES.get(COOKIE_SESION)
-        return str(valor) if valor else ""
-    except Exception:
-        return ""
-
-
-def _escribir_cookie(token: str):
-    if _COOKIES is None or not token:
-        return
-    try:
-        _COOKIES.set(COOKIE_SESION, token, max_age=COOKIE_DIAS * 86400,
-                     same_site="Lax", secure=_base_url_app().startswith("https"),
-                     path="/")
-    except Exception:
-        pass
-
-
-def _borrar_cookie():
-    if _COOKIES is None:
-        return
-    try:
-        _COOKIES.remove(COOKIE_SESION)
-    except Exception:
-        try:
-            _COOKIES.set(COOKIE_SESION, "", max_age=0, path="/")
-        except Exception:
-            pass
-
-
 def _auto_login_cookie(datos: dict):
     """Si hay cookie válida y nadie ha entrado, abre sesión automáticamente."""
     if st.session_state.get("usuario"):
         return
-    token = _leer_cookie()
-    perfil_id = _verificar_token_sesion(token)
+    token = auth.leer_cookie()
+    perfil_id = auth.verificar_token_sesion(token)
     if not perfil_id:
         if token:  # token corrupto o expirado: limpiar la cookie
-            _borrar_cookie()
+            auth.borrar_cookie()
         return
     perfil = next((p for p in datos.get("perfiles", [])
                    if p.get("id") == perfil_id), None)
     if perfil is None:
-        _borrar_cookie()
+        auth.borrar_cookie()
         return
     st.session_state["usuario"] = perfil["nombre"]
     st.session_state["pagina"] = "📦 Catálogo"
-
-
-# ----------------------------- Google OAuth --------------------------------
-
-def _credenciales_google() -> dict:
-    """Client ID/Secret de Google: st.secrets['google_oauth'] o .env_google_oauth."""
-    try:
-        s = getattr(st, "secrets", None)
-        if s is not None and "google_oauth" in s:
-            bloque = dict(s["google_oauth"])
-            if bloque.get("client_id") and bloque.get("client_secret"):
-                return bloque
-    except Exception:
-        pass
-    try:  # archivo local (mismo patrón que .env_db_password)
-        ruta = os.path.join(core.RUTA_DIR, ".env_google_oauth")
-        with open(ruta, encoding="utf-8") as f:
-            cfg = {}
-            for linea in f:
-                if "=" in linea:
-                    k, v = linea.strip().split("=", 1)
-                    cfg[k.strip()] = v.strip().strip('"').strip("'")
-        if cfg.get("client_id") and cfg.get("client_secret"):
-            return cfg
-    except OSError:
-        pass
-    return {}
-
-
-def _url_autorizacion_google() -> str:
-    """URL de Google con PKCE (S256). El code_verifier vive en session_state."""
-    cfg = _credenciales_google()
-    if not cfg:
-        return ""
-    verifier = secrets.token_urlsafe(64)
-    st.session_state["oauth_verifier"] = verifier
-    st.session_state["oauth_state"] = secrets.token_urlsafe(32)
-    challenge = base64.urlsafe_b64encode(
-        hashlib.sha256(verifier.encode("utf-8")).digest()).rstrip(b"=").decode()
-    params = {
-        "client_id": cfg["client_id"],
-        "redirect_uri": _base_url_app() + "/",
-        "response_type": "code",
-        "scope": "openid email profile",
-        "state": st.session_state["oauth_state"],
-        "code_challenge": challenge,
-        "code_challenge_method": "S256",
-        "prompt": "select_account",
-    }
-    return GOOGLE_AUTH_URL + "?" + urllib.parse.urlencode(params)
-
-
-def _intercambiar_codigo_google(code: str) -> dict:
-    """Cambia el code por tokens y devuelve la info del usuario de Google."""
-    cfg = _credenciales_google()
-    verifier = st.session_state.get("oauth_verifier", "")
-    if not cfg or not verifier:
-        return {}
-    cuerpo = urllib.parse.urlencode({
-        "code": code,
-        "client_id": cfg["client_id"],
-        "client_secret": cfg["client_secret"],
-        "redirect_uri": _base_url_app() + "/",
-        "grant_type": "authorization_code",
-        "code_verifier": verifier,
-    }).encode()
-    req = urllib.request.Request(
-        GOOGLE_TOKEN_URL, data=cuerpo,
-        headers={"Content-Type": "application/x-www-form-urlencoded"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        tokens = json.loads(r.read().decode())
-    access = tokens.get("access_token")
-    if not access:
-        return {}
-    req2 = urllib.request.Request(
-        GOOGLE_USERINFO_URL, headers={"Authorization": f"Bearer {access}"})
-    with urllib.request.urlopen(req2, timeout=30) as r2:
-        return json.loads(r2.read().decode())
 
 
 def _manejar_retorno_oauth(datos: dict):
@@ -1623,7 +1436,7 @@ def _manejar_retorno_oauth(datos: dict):
                  "Inténtalo de nuevo.")
         return
     try:
-        info = _intercambiar_codigo_google(str(code))
+        info = auth.intercambiar_codigo_google(str(code))
     except Exception as e:
         print(f"[oauth] ⚠️ No se pudo completar el inicio con Google: {e}")
         st.error("⚠️ No se pudo completar el inicio con Google. Inténtalo de nuevo.")
@@ -1655,7 +1468,7 @@ def _manejar_retorno_oauth(datos: dict):
     guardar(datos)
     st.session_state["usuario"] = perfil["nombre"]
     st.session_state["pagina"] = "📦 Catálogo"
-    _escribir_cookie(_crear_token_sesion(perfil["id"]))
+    auth.escribir_cookie(auth.crear_token_sesion(perfil["id"]))
     if creado:
         st.toast(f"👋 ¡Bienvenido, {perfil['nombre']}! "
                  "Perfil creado con tu cuenta de Google.")
@@ -1756,13 +1569,13 @@ def pantalla_login(datos: dict):
         perfil = perfil_por_nombre(datos, nombre)
         valido = False
         if perfil is not None and perfil.get("password_hash"):
-            valido = verificar_password(l_pw, perfil["password_hash"])
+            valido = auth.verificar_password(l_pw, perfil["password_hash"])
 
         if valido:
             _login_exito(estado)
             st.session_state["usuario"] = perfil["nombre"]
             if l_recordar:
-                _escribir_cookie(_crear_token_sesion(perfil["id"]))
+                auth.escribir_cookie(auth.crear_token_sesion(perfil["id"]))
             st.rerun()
 
         # ---- Rama de reclamación de cuenta (perfil sin password_hash) ----
@@ -1771,11 +1584,11 @@ def pantalla_login(datos: dict):
         if reclamar and perfil is not None and not perfil.get("password_hash"):
             if l_pw and l_pw == l_pw_conf:
                 _login_exito(estado)
-                perfil["password_hash"] = hash_password(l_pw)
+                perfil["password_hash"] = auth.hash_password(l_pw)
                 guardar(datos)
                 st.session_state["usuario"] = perfil["nombre"]
                 if l_recordar:
-                    _escribir_cookie(_crear_token_sesion(perfil["id"]))
+                    auth.escribir_cookie(auth.crear_token_sesion(perfil["id"]))
                 st.success(f"✅ Contraseña asignada a '{nombre}'. ¡Bienvenido!")
                 st.rerun()
             elif l_pw:
@@ -1790,9 +1603,9 @@ def pantalla_login(datos: dict):
         st.error("Credenciales incorrectas. Revisa nombre y contraseña.")
 
     # ---- Continuar con Google (OAuth; complementa al login tradicional) ----
-    cfg_google = _credenciales_google()
+    cfg_google = auth.credenciales_google()
     if cfg_google:
-        url_google = _url_autorizacion_google()
+        url_google = auth.url_autorizacion_google()
         if url_google:
             st.markdown("**o continúa con**")
             st.markdown(
@@ -1829,14 +1642,14 @@ def pantalla_login(datos: dict):
             datos["perfiles"].append({
                 "id": nuevo_id,
                 "nombre": nombre,
-                "password_hash": hash_password(r_pw),
+                "password_hash": auth.hash_password(r_pw),
             })
             guardar(datos)
             st.session_state["usuario"] = nombre
-            _escribir_cookie(_crear_token_sesion(nuevo_id))
+            auth.escribir_cookie(auth.crear_token_sesion(nuevo_id))
             st.rerun()
 
-    sin_pw = perfiles_sin_password(datos)
+    sin_pw = auth.perfiles_sin_password(datos)
     if sin_pw:
         st.caption(f"Cuentas sin contraseña (reclámalas desde el login): "
                    f"{', '.join(sin_pw)}")
@@ -3635,7 +3448,7 @@ def _tarjeta_perfil(datos: dict, perfil: dict, admin: bool):
                     elif n1 != n2:
                         st.error("Las contraseñas no coinciden.")
                     else:
-                        perfil["password_hash"] = hash_password(n1)
+                        perfil["password_hash"] = auth.hash_password(n1)
                         guardar(datos)
                         st.success("✅ Contraseña actualizada.")
                         try:
