@@ -334,3 +334,14 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   Catálogo/ficha/login/Rankings/Evolución: lenguaje visual unificado. QA AppTest
   10/10 (todas las secciones + ficha producto + ficha coffeeshop). Desplegado
   en f1a6c2b.
+- **TEMA CÓSMICO + VERIFICACIÓN MÓVIL (ago 2026)**: referencia visual del
+  personaje de la cuenta (anime: oscuro profundo + verde neón + violeta galaxia
+  con cristales morados y aura verde). Se potenció el VIOLETA como acento
+  secundario en: fondo (radial violeta galaxia + verde, con glow extra en la
+  esquina inferior), hero (gradiente violeta→verde + borde violeta + sombra) y
+  sidebar (glow violeta arriba + degradado). Verificado objetivamente en
+  producción: fondoVioleta=true, fondoVerde=true, hero borde
+  rgba(126,90,224,0.35). Responsive MÓVIL verificado objetivamente a 390×844:
+  vw=391, mainW=391 (contenido a ancho completo), filtros Tipo/País apilados en
+  2 líneas, tarjetas del grid apiladas verticalmente (1 columna), botón ☰ Menú
+  visible a full-width. QA AppTest 9/9. Desplegado en 812545a.
