@@ -251,12 +251,15 @@ button, input, textarea, select, label {
   font-family: 'Plus Jakarta Sans', -apple-system, 'Segoe UI', Roboto, sans-serif !important;
 }
 
-/* Fondo: profundidad con 2 glows (verde + violeta) sobre oscuro casi negro */
+/* Fondo: profundidad cósmica — verde neón (aura del personaje) + violeta
+   galaxia + cristales morados, sobre oscuro casi negro. */
 [data-testid="stAppViewContainer"] {
   background:
-    radial-gradient(1250px 680px at 12% -10%, rgba(74,222,128,0.10), transparent 55%),
-    radial-gradient(1050px 580px at 108% -6%, rgba(126,90,224,0.10), transparent 52%),
-    linear-gradient(180deg, #0B0F15 0%, #0A0E14 100%);
+    radial-gradient(1250px 680px at 12% -10%, rgba(74,222,128,0.13), transparent 55%),
+    radial-gradient(1050px 640px at 108% -8%, rgba(126,90,224,0.16), transparent 52%),
+    radial-gradient(900px 520px at 85% 108%, rgba(88,60,164,0.12), transparent 58%),
+    radial-gradient(700px 420px at 6% 70%, rgba(74,222,128,0.06), transparent 60%),
+    linear-gradient(180deg, #0B0F17 0%, #0A0D16 100%);
 }
 
 [data-testid="stAppViewContainer"] > .main { background: transparent; }
@@ -272,8 +275,10 @@ footer { visibility: hidden; }
 
 /* ---------- 2 · SIDEBAR ---------- */
 [data-testid="stSidebar"] {
-  background: linear-gradient(180deg, #0F141C 0%, #0A0E14 100%) !important;
-  border-right: 1px solid #1B232D !important;
+  background:
+    radial-gradient(600px 400px at 0% 0%, rgba(126,90,224,0.14), transparent 60%),
+    linear-gradient(180deg, #10141D 0%, #0A0D16 100%) !important;
+  border-right: 1px solid #232C37 !important;
 }
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h1,
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] h2,
@@ -1105,13 +1110,13 @@ def hero(datos: dict, logueado: bool):
         chip += (f"&nbsp;&nbsp;<span style='color:#8B93A1'>·&nbsp;👤 "
                  f"{_html.escape(str(st.session_state.get('usuario', '')))}</span>")
     st.markdown(
-        f'<div style="border-radius:16px;padding:0.75rem 1.05rem;margin:0 0 0.7rem;'
-        f'background:linear-gradient(135deg,rgba(74,222,128,0.18),rgba(126,90,224,0.13));'
-        f'border:1px solid rgba(74,222,128,0.34);">'
+        f'<div style="border-radius:16px;padding:0.8rem 1.1rem;margin:0 0 0.7rem;'
+        f'background:linear-gradient(135deg,rgba(126,90,224,0.22),rgba(74,222,128,0.16));'
+        f'border:1px solid rgba(126,90,224,0.35);box-shadow:0 6px 24px rgba(0,0,0,0.3);">'
         f'<div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">'
         f'<span style="font-size:1.3rem;font-weight:800;color:#F2F5F9;'
         f'letter-spacing:-0.02em;">🌿 TerpsXHunter</span>'
-        f'<span style="font-size:0.8rem;color:#8B93A1;">· {n} cata'
+        f'<span style="font-size:0.8rem;color:#A5AEB8;">· {n} cata'
         f'{"s" if n != 1 else ""}</span>'
         f'<span style="margin-left:auto;font-size:0.8rem;">{chip}</span></div></div>',
         unsafe_allow_html=True)
