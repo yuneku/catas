@@ -672,14 +672,14 @@ button[data-variant="pills"][aria-checked="true"] {
   border-color: rgba(74,222,128,0.45) !important;
 }
 
-/* ---------- 26 · MARCA DE AGUA SUTIL (logo del personaje) ---------- */
-/* Div fijo detrás del contenido, muy tenue, que no molesta ni intercepta clics. */
+/* ---------- 26 · MARCA DE AGUA SUTIL (contorno del personaje) ---------- */
+/* Fijo detrás del contenido, tenue pero perceptible, sin interceptar clics. */
 .marca-agua {
   position: fixed; top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  width: min(520px, 80vw); height: min(520px, 80vw);
+  width: min(560px, 82vw); height: min(560px, 82vw);
   background-size: contain; background-repeat: no-repeat;
-  background-position: center; opacity: 0.05;
+  background-position: center; opacity: 0.13;
   z-index: 0; pointer-events: none;
 }
 
