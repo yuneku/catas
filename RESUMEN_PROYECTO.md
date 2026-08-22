@@ -450,3 +450,14 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   (_auto_login_cookie, _manejar_retorno_oauth) adaptados a auth.*. app_streamlit pasó
   de 4471 a 4284 líneas. QA AppTest 27/27 (funciones auth, hash/token round-trip,
   login, 8 secciones). Verificado en producción. Desplegado en c2acac1.
+- **PASO 5 AUDITORÍA: CARGA PEREZOSA DE FOTOS (ago 2026)**: el SELECT base de
+  db_supabase ya NO trae foto_b64 (era el mayor peso: MB en cada carga/rerun).
+  Nueva db.cargar_fotos_b64(tabla, ids) bajo demanda (lotes de 200) + en
+  app_streamlit _fotos_b64_batch (caché 2min, invalidada al guardar) y
+  _asegurar_fotos(datos, tabla, ids) que inyecta foto_b64 en el dict solo para
+  las entidades visibles (renders existentes intactos, sin tocar 15 call-sites).
+  Secciones conectadas: catálogo, por votar, rankings, productores, asociaciones,
+  ficha_premium. Las fotos de la BD son b64 crudo JPEG (/9j/) — formato que ya
+  esperan los helpers. QA AppTest 21/21 (SELECT sin fotos, cargar_fotos real 5/5,
+  inyección, 8 secciones OK). Verificado en producción: 12 tarjetas con 12 fotos
+  renderizadas. Desplegado en ac2b859.
