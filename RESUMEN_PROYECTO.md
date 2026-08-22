@@ -380,3 +380,12 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   sidebar lo lista primero. Verificado en producción (capturas): hero con el
   personaje, avatar, tarjetas grid, navegación clic→Catálogo OK. QA AppTest 13/13.
   Desplegado en d06d3ed (app + assets).
+- **RANKINGS PROFESIONAL (ago 2026)**: filas de la lista con degradado + hover
+  verde; botón "👁 Ver" compacto e integrado (borde verde rgba, radio, hover verde,
+  ya no el gris genérico que restaba protagonismo a la fila); nombre en negrita
+  HTML robusta (arregla un bug real: en posiciones >3 el `**negrita**` de markdown
+  no se parseaba y se veía `**4º · Banana OG**` literal; se pasa a `<span
+  font-weight:700>` y se elimina el espacio inicial del prefijo de posición).
+  Podium con medallas intacto. Verificado en producción: conAsteriscos=0,
+  nombres limpios, botón Ver verde. QA AppTest 8/8. Desplegado en 1b1918d
+  (estilo) + 3c02504 (fix negrita).
