@@ -366,3 +366,17 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   Verificado en producción con sesión (perfil _qa_visual): nota 50.0/100 en
   ámbar con barra al 50%. QA AppTest 5/5 (formulario real: 15 sliders + tarjeta
   de nota + ficha). Desplegado en 194ddb2.
+- **SECCIÓN INICIO (ago 2026)**: nueva portada "🏠 Inicio" (primera pestaña del
+  menú y página de arranque). Integra la IMAGEN DEL PERSONAJE de forma
+  profesional: se preparó como asset (assets/inicio_hero.jpg 960px + avatar 480px,
+  recorte de la cara; extraída la paleta violeta galaxia #180048/#300048 + verde).
+  El hero es un banner grande con la imagen como FONDO + overlay degradado oscuro
+  (legibilidad) + título + intro + estado (Conectado/catas) + avatar con borde
+  violeta. Debajo, tarjetas de navegación 3-2-1 (icono + título + descripción +
+  botón Abrir) que llevan a cada sección; "Nueva Cata" aparece solo para
+  admin/confianza. Se oculta el hero compacto en el Inicio (usa el banner grande).
+  `_asset_b64()` cachea el asset como data URI (funciona local y nube). La app
+  ARRANCA en Inicio (pagina por defecto "🏠 Inicio" en _STATE_DEFAULTS) y el
+  sidebar lo lista primero. Verificado en producción (capturas): hero con el
+  personaje, avatar, tarjetas grid, navegación clic→Catálogo OK. QA AppTest 13/13.
+  Desplegado en d06d3ed (app + assets).
