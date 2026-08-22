@@ -7,3 +7,5 @@ Pillow>=10.0
 psycopg2-binary>=2.9
 # Sesión persistente (cookie "recordar sesión")
 streamlit-cookies-controller>=0.0.4
+# Gráficos con degradado (chart de actividad cósmico en Evolución)
+matplotlib>=3.7

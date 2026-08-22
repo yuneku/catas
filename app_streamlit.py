@@ -43,6 +43,17 @@ import time
 import pandas as pd
 import streamlit as st
 
+# matplotlib para gráficos con degradado (verde→violeta cósmico). Import lazy con
+# fallback: si no está disponible los charts usan la vía nativa de Streamlit.
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LinearSegmentedColormap as _LSC
+    _HAY_MPL = True
+except Exception:
+    _HAY_MPL = False
+
 # Sesión persistente: cookie "recordar sesión" (JS del navegador; la firma
 # HMAC del token hace que no se pueda forjar sin el secreto del servidor).
 try:
@@ -312,6 +323,8 @@ footer { visibility: hidden; }
 [data-testid="stMarkdown"] h2 {
   font-size: 1.42rem;
   padding-left: 0.72rem; border-left: 4px solid #4ADE80;
+  /* acento violeta sutil (referencia del personaje) sin tocar el estilo */
+  text-shadow: 0 0 22px rgba(126,90,224,0.25), 0 0 2px rgba(126,90,224,0.10);
 }
 [data-testid="stMarkdown"] h3 { font-weight: 700; color: #E7EDF4; letter-spacing: -0.01em; }
 
@@ -3057,6 +3070,39 @@ def _anio_int(cata) -> int:
 _PALETA_CHART = ["#34D97B", "#7E5AE0", "#22C55E", "#A78BFA", "#4ADE80"]
 
 
+def _chart_actividad(ser, height_px=170):
+    """Chart de barras con degradado sutil verde→violeta (años más recientes
+    más violeta, referencia cósmica del personaje). Devuelve una Figure o None
+    si matplotlib no está disponible."""
+    if not _HAY_MPL:
+        return None
+    try:
+        s = pd.Series(ser).sort_index()
+        if s.empty:
+            return None
+        anos = list(s.index)
+        valores = list(s.values)
+        n = len(anos)
+        cmap = _LSC.from_list("cosmic", ["#34D97B", "#4ADE80", "#7E5AE0"])
+        colores = [cmap(i / max(1, n - 1)) for i in range(n)] if n > 1 else [cmap(0.5)]
+        fig, ax = plt.subplots(figsize=(9, max(1.4, height_px / 100)), dpi=110)
+        fig.patch.set_facecolor("#0A0D16")
+        ax.set_facecolor("#0A0D16")
+        ax.bar([str(a) for a in anos], valores, color=colores, width=0.62)
+        for sp in ("top", "right", "left"):
+            ax.spines[sp].set_visible(False)
+        ax.spines["bottom"].set_color("#2A313C")
+        ax.tick_params(axis="x", colors="#A5AEB8", labelsize=9)
+        ax.tick_params(axis="y", colors="#A5AEB8", labelsize=8, length=0)
+        ax.grid(axis="y", color="#1B2129", linewidth=0.8, alpha=0.6)
+        ax.set_axisbelow(True)
+        fig.tight_layout()
+        return fig
+    except Exception:
+        return None
+
+
+
 def _df_notas(catas_filtradas) -> pd.DataFrame:
     """DataFrame (anio, temporada, periodo, clave, productor, nota) de catas
     con voto y año válido. 'periodo' = '2025 · S2' si hay temporada, si no '2025';
@@ -3153,7 +3199,9 @@ def seccion_evolucion(datos: dict):
             if _vol:
                 _ser = pd.Series(dict(sorted(_vol.items())))
                 st.caption(f"**Actividad**: {int(_ser.sum())} catas registradas por año")
-                st.bar_chart(_ser, height=170, color="#34D97B")
+                fig = _chart_actividad(_ser, height_px=170)
+                if fig is not None:
+                    st.pyplot(fig, clear_figure=True)
                 st.divider()
             sub_df = df[df["productor"].isin(elegidos)]
             if agrupar == "Año":
