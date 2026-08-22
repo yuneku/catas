@@ -434,3 +434,12 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   QA AppTest 16/16 (toggle ON/OFF, handler atrapa ficha inexistente, mensaje genérico,
   8 secciones OK). Verificado en producción: toggle presente, sin campo Confirmar en
   login normal. Desplegado en 8732191.
+- **PASO 4 AUDITORÍA: GUARDADO INCREMENTAL DE VOTOS (ago 2026)**: nuevo
+  db.guardar_voto_incremental(cata_id, voto, version) — UPSERT directo del voto
+  (1 round-trip) + bump de versión en la MISMA transacción, en vez del re-sync
+  total (~7s -> <100ms). Aplica cuando la cata ya existía y no cambió la foto;
+  si falla o hay ErrorVersionAntigua cae al re-sync (fallback seguro). Igual para
+  coffeeshops: guardar_voto_cs_incremental + quitar_voto_cs_incremental.
+  Probado CONTRA SUPABASE REAL: guarda (True), version vieja -> ErrorVersionAntigua,
+  bump 4->5, dato limpiado después (11 votos restaurados). QA AppTest 12/12.
+  Desplegado en ecfd3c0.
