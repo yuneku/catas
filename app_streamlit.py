@@ -688,8 +688,7 @@ button[data-variant="pills"][aria-checked="true"] {
 
 def _inyectar_marca_agua():
     """Marca de agua sutil con el contorno del personaje, fija y detrás del
-    contenido. No intercepta clics (pointer-events:none) y se ve tenue.
-    Se usa st.markdown (no st.html) porque inyecta en el flujo del main."""
+    contenido. No intercepta clics (pointer-events:none) y se ve tenue."""
     wm_b64 = _asset_b64("watermark_circle.png")
     if not wm_b64:
         return
@@ -835,23 +834,27 @@ def _b64_a_jpeg(b64: str, px: int, cuadrado: bool) -> str:
         return b64  # fallback seguro: original
 
 
-@st.cache_data(show_spinner=False)
 def _asset_b64(nombre: str) -> str:
     """Lee un asset de la carpeta assets/ y devuelve su data URI base64.
-    Funciona igual en local y en la NUBE (Streamlit embebe el repo, así que
-    assets/ está presente). Cacheado para no releer el archivo cada rerun."""
-    try:
-        base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
-        rutas = [os.path.join(base, nombre),
-                 os.path.join(os.getcwd(), "assets", nombre)]
-        for r in rutas:
+    Funciona en local y en la NUBE, probando varias rutas de montaje
+    (`__file__`, cwd, /mount/src de Streamlit Cloud, raíz del repo)."""
+    bases = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets"),
+        os.path.join(os.getcwd(), "assets"),
+        os.path.join("/mount/src", os.path.basename(os.getcwd()) or "", "assets"),
+        "/mount/src/assets",
+        "assets",
+    ]
+    for b in bases:
+        r = os.path.join(b, nombre)
+        try:
             if os.path.exists(r):
                 with open(r, "rb") as f:
                     data = f.read()
                 mime = "image/png" if nombre.lower().endswith(".png") else "image/jpeg"
                 return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
-    except Exception:
-        pass
+        except Exception:
+            continue
     return ""
 
 
