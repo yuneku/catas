@@ -397,3 +397,14 @@ vacíos: auto-recuperación `cargar.clear()` + `rerun` si la BD tiene datos.
   Verificado en producción: favicon servido como PNG de 10KB (el logo), título de
   pestaña TerpsXHunter. QA AppTest 8/8. Desplegado en 7e31ff6 (quitar hoja) +
   a6c8726 (favicon).
+- **FONDO + MARCA DE AGUA (ago 2026)**: fondo inspirado en la referencia (degradado
+  radial difuso muy sutil: glow verde sup-izq rgb(20,72,52) -> negro #030510 centro ->
+  violeta inf-der rgb(64,32,108); stops muestreados de la imagen). MARCA DE AGUA con el
+  CONTORNO (line art) del personaje: se genera desde el line art (umbral 105, alpha 0.55,
+  tint gris-azul 150,162,188) como PNG ligero (89KB), inyectado como div fijo con
+  z-index 9999 + opacity 0.16 + pointer-events none (sello sutil que no molesta ni tapa
+  clics). _asset_b64 es robusto (busca en __file__, cwd, /mount/src de Streamlit Cloud,
+  raíz; sin st.cache_data para no cachear vacío). Verificado en producción: contorno visible
+  en el fondo de Catálogo, avatar/favicon/logo del personaje en sidebar-hero-pestaña.
+  QA 8/8. Desplegado: fondo+watermark e3c8cb5/5787281, fix nube e4e9913, contorno
+  bf175e9.
