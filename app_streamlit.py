@@ -1440,8 +1440,15 @@ def _aplicar_filtros_url(datos: dict):
             aplicado = True
     except Exception:
         pass
+    try:
+        c = qp.get("cata")
+        if c and str(c) in {str(x.get("id")) for x in datos.get("catas", [])}:
+            st.session_state["ficha_id"] = str(c)
+            aplicado = True
+    except Exception:
+        pass
     if aplicado:
-        for k in ("tipo", "anio", "buscar"):
+        for k in ("tipo", "anio", "buscar", "cata"):
             try:
                 if k in qp:
                     del qp[k]
