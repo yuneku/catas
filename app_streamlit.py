@@ -1409,6 +1409,47 @@ def sidebar(datos: dict):
         st.caption(f"{total} catas · {votos} votos")
 
 
+def _aplicar_filtros_url(datos: dict):
+    """Si la URL trae ?tipo=&anio=&buscar=, abre el Catálogo ya filtrado.
+
+    El bot de Telegram genera enlaces tipo terpsxhunter.streamlit.app?tipo=Frozen&anio=2026.
+    Validamos cada valor contra las opciones de los widgets para no romper la UI.
+    """
+    qp = st.query_params
+    aplicado = False
+    _TIPOS = list(core.TIPOS_VALIDOS)
+    _ANIOS = list(core.anios_produccion())
+    try:
+        t = qp.get("tipo")
+        if t and str(t) in _TIPOS:
+            st.session_state["cat_tipo"] = str(t)
+            aplicado = True
+    except Exception:
+        pass
+    try:
+        a = qp.get("anio")
+        if a and str(a) in _ANIOS:
+            st.session_state["cat_anio"] = str(a)
+            aplicado = True
+    except Exception:
+        pass
+    try:
+        b = qp.get("buscar")
+        if b:
+            st.session_state["cat_buscar"] = str(b)
+            aplicado = True
+    except Exception:
+        pass
+    if aplicado:
+        for k in ("tipo", "anio", "buscar"):
+            try:
+                if k in qp:
+                    del qp[k]
+            except Exception:
+                pass
+        st.session_state["pagina"] = "📦 Catálogo"
+
+
 def perfil_activo(datos: dict):
     """El perfil logueado (la identidad real de la sesión actual)."""
     nombre = st.session_state.get("usuario")
@@ -4276,6 +4317,7 @@ def main():
     inyectar_css()  # UI mobile-first (solo vista; no toca la lógica de datos)
     _inyectar_marca_agua()  # marca de agua sutil con el logo del personaje
     logueado = bool(st.session_state.get("usuario"))
+    _aplicar_filtros_url(datos)
 
     # Invitado que pulsó "Iniciar sesión" -> pantalla de acceso
     if not logueado and st.session_state.get("pagina") == "🔐 Acceso":
