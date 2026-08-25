@@ -1142,7 +1142,8 @@ def fila_producto(cata: dict, pos: int = None, datos: dict = None):
         prof_html = (f"<div style='font-size:13px;font-weight:700;color:#e8c35a;"
                      f"line-height:1.1;margin-top:2px'>⭐ {nota_prof:.1f}</div>")
 
-    color_nota = core.color_nota(media / 10)
+    color_nota = core.color_nota(media / 10) if n_votos else "#8B93A1"
+    texto_nota = f"{media:.1f}" if n_votos else "—"
     # HTML en UNA SOLA LÍNEA (concatenación sin \n): el parser de markdown
     # interpreta cualquier línea con indentación desigual como bloque de
     # código y se vería el HTML en crudo (bug MelaVerde).
@@ -1158,7 +1159,7 @@ def fila_producto(cata: dict, pos: int = None, datos: dict = None):
         + extracto_html + coment_usuario_html
         + '</div>'
         '<div style="flex:0 0 auto;text-align:right;min-width:46px">'
-        f'<div style="font-size:22px;font-weight:800;color:{color_nota};line-height:1.1">{media:.1f}</div>'
+        f'<div style="font-size:22px;font-weight:800;color:{color_nota};line-height:1.1">{texto_nota}</div>'
         + prof_html
         + f'<div style="font-size:11px;color:#6B7480">{n_votos} voto'
         + ('s' if n_votos != 1 else '') + '</div>'
@@ -2049,7 +2050,8 @@ def tarjeta_por_votar(cata: dict, datos: dict, perfil_id: str):
     n_votos = len(core.votos_validos(cata))
     nombre = _html.escape(str(cata.get("nombre", "—")))
     productor = _html.escape(str(cata.get("productor", "") or "—"))
-    color_nota = core.color_nota(media / 10)
+    color_nota = core.color_nota(media / 10) if n_votos else "#8B93A1"
+    texto_nota = f"{media:.1f}" if n_votos else "—"
 
     foto_html = foto_base64(core.resolver_ruta_foto(cata.get("foto")), px=84,
                             b64=cata.get("foto_b64", ""))
@@ -2090,7 +2092,7 @@ def tarjeta_por_votar(cata: dict, datos: dict, perfil_id: str):
         + badge_html
         + '</div>'
         '<div style="flex:0 0 auto;text-align:right;min-width:42px">'
-        f'<div style="font-size:20px;font-weight:800;color:{color_nota};line-height:1.1">{media:.1f}</div>'
+        f'<div style="font-size:20px;font-weight:800;color:{color_nota};line-height:1.1">{texto_nota}</div>'
         + f'<div style="font-size:10px;color:#6B7480">{n_votos} voto'
         + ('s' if n_votos != 1 else '') + '</div>'
         + '</div></div>'
@@ -2252,7 +2254,8 @@ def tarjeta_catalogo(cata: dict, datos: dict, admin: bool):
     n_votos = len(core.votos_validos(cata))
     nombre = _html.escape(str(cata.get("nombre", "—")))
     productor = _html.escape(str(cata.get("productor", "") or "—"))
-    color_nota = core.color_nota(media / 10)
+    color_nota = core.color_nota(media / 10) if n_votos else "#8B93A1"
+    texto_nota = f"{media:.1f}" if n_votos else "—"
 
     # Foto del material (thumbnail)
     foto_html = foto_base64(core.resolver_ruta_foto(cata.get("foto")), px=84,
@@ -2286,7 +2289,7 @@ def tarjeta_catalogo(cata: dict, datos: dict, admin: bool):
         '<div style="margin-top:4px">' + '  '.join(chips_row) + '</div>'
         '</div>'
         '<div style="flex:0 0 auto;text-align:right;min-width:42px">'
-        f'<div style="font-size:20px;font-weight:800;color:{color_nota};line-height:1.1">{media:.1f}</div>'
+        f'<div style="font-size:20px;font-weight:800;color:{color_nota};line-height:1.1">{texto_nota}</div>'
         + prof_html
         + f'<div style="font-size:10px;color:#6B7480">{n_votos} voto'
         + ('s' if n_votos != 1 else '') + '</div>'
@@ -2332,6 +2335,26 @@ def seccion_catalogo(datos: dict):
     _catalogo_grid(datos, admin)
 
 
+def _limpiar_filtros_catalogo() -> None:
+    """Restaura una exploración neutral sin dejar filtros invisibles activos."""
+    valores = {
+        "cat_buscar": "",
+        "cat_tipo": "Todos",
+        "cat_pais": "Todos",
+        "cat_anio": "Todos",
+        "cat_voto": "Todos",
+        "cat_orden": "Mejor puntuación",
+        "cat_n": 12,
+    }
+    st.session_state.update(valores)
+    try:
+        # Los enlaces del bot aplican filtros al abrirse; al pulsar limpiar,
+        # quitar los parámetros evita que reaparezcan al siguiente rerun total.
+        st.query_params.clear()
+    except Exception:
+        pass
+
+
 @st.fragment
 def _catalogo_grid(datos: dict, admin: bool):
     """Buscador + filtros + grid del catálogo (recarga parcial al filtrar)."""
@@ -2345,14 +2368,24 @@ def _catalogo_grid(datos: dict, admin: bool):
         filtro_pais = st.pills("País", ["Todos"] + core.PAISES_VALIDOS,
                                key="cat_pais", selection_mode="single",
                                default="Todos")
-    filtro_anio = st.selectbox("Año", ["Todos"] + core.anios_produccion(),
-                               key="cat_anio")
+    c3, c4 = st.columns(2)
+    with c3:
+        filtro_anio = st.selectbox("Año", ["Todos"] + core.anios_produccion(),
+                                   key="cat_anio")
+    with c4:
+        orden = st.selectbox(
+            "Ordenar por",
+            ["Mejor puntuación", "Más recientes", "Más votados", "A–Z"],
+            key="cat_orden",
+            help="Elige cómo explorar los resultados del catálogo.")
     perfil = perfil_activo(datos)
     filtro_voto = "Todos"
     if perfil is not None:
         filtro_voto = st.pills("Mi voto", ["Todos", "Sin votar", "Ya votado"],
                                key="cat_voto", selection_mode="single",
                                default="Todos")
+    st.button("↺ Limpiar filtros", key="cat_limpiar", width="content",
+              on_click=_limpiar_filtros_catalogo)
 
     lista = []
     for c in datos["catas"]:
@@ -2372,9 +2405,23 @@ def _catalogo_grid(datos: dict, admin: bool):
             if filtro_voto == "Ya votado" and not tiene_voto:
                 continue
         lista.append(c)
-    lista.sort(key=lambda c: (-core.nota_media(c), str(c.get("nombre", "")).lower()))
+    if orden == "Más recientes":
+        # Las fechas ISO se pueden ordenar como texto; los productos sin fecha
+        # se quedan al final y el nombre estabiliza el orden.
+        lista.sort(key=lambda c: (str(c.get("fecha") or ""),
+                                  str(c.get("nombre", "")).lower()),
+                   reverse=True)
+    elif orden == "Más votados":
+        lista.sort(key=lambda c: (-len(core.votos_validos(c)),
+                                  -core.nota_media(c),
+                                  str(c.get("nombre", "")).lower()))
+    elif orden == "A–Z":
+        lista.sort(key=lambda c: str(c.get("nombre", "")).lower())
+    else:
+        lista.sort(key=lambda c: (-core.nota_media(c),
+                                  str(c.get("nombre", "")).lower()))
 
-    st.caption(f"{len(lista)} producto{'s' if len(lista) != 1 else ''}")
+    st.caption(f"{len(lista)} producto{'s' if len(lista) != 1 else ''} · {orden}")
     if not lista:
         st.info("Sin productos con esos criterios.")
         return
@@ -2483,6 +2530,8 @@ def ficha_premium(datos: dict, cata: dict):
     votaciones están disponibles para quien tenga sesión (solo su voto)."""
     perfil = perfil_activo(datos)
     puede_votar = perfil is not None
+    voto_propio = (core.voto_de_perfil(cata, perfil["id"])
+                   if perfil is not None else None)
     media = core.nota_media(cata)
     n_votos = len(core.votos_validos(cata))
     # Paso 5 auditoría: fotos bajo demanda (solo las de esta ficha)
@@ -2493,7 +2542,8 @@ def ficha_premium(datos: dict, cata: dict):
                      == str(cata.get("productor", "")).strip()])
     nombre = _html.escape(str(cata.get("nombre", "—")))
     productor = _html.escape(str(cata.get("productor", "") or "—"))
-    color_nota = core.color_nota(media / 10)
+    color_nota = core.color_nota(media / 10) if n_votos else "#8B93A1"
+    texto_nota = f"{media:.1f}" if n_votos else "—"
 
     # Insignias: tipo / país / año / temporada
     chips_row = [chip(_html.escape(str(cata.get("tipo", "—"))),
@@ -2541,7 +2591,7 @@ def ficha_premium(datos: dict, cata: dict):
                 f'<div style="font-size:1.5rem;font-weight:800;color:#F2F5F9;'
                 f'letter-spacing:-0.02em;line-height:1.15">{nombre}</div>'
                 f'<div style="font-size:2.4rem;font-weight:800;color:{color_nota};'
-                f'line-height:1;margin-left:auto">{media:.1f}</div></div>',
+                f'line-height:1;margin-left:auto">{texto_nota}</div></div>',
                 unsafe_allow_html=True)
             st.markdown(f"🏭 **{productor}**")
             st.markdown(" ".join(chips_row), unsafe_allow_html=True)
@@ -2565,8 +2615,29 @@ def ficha_premium(datos: dict, cata: dict):
         # ================= COLUMNA DERECHA: votaciones + comentarios =================
         with col_der:
             st.markdown("### 🗳 Votaciones")
-            if puede_votar and core.voto_de_perfil(cata, perfil["id"]) is None:
-                with st.expander("🗳 Votar este producto", expanded=True):
+            with st.container(border=True):
+                r1, r2, r3 = st.columns(3)
+                with r1:
+                    st.metric("Nota general", f"{media:.1f}" if n_votos else "—")
+                with r2:
+                    st.metric("Votos", n_votos)
+                with r3:
+                    estado = ("Valorado" if voto_propio is not None else
+                              ("Pendiente" if puede_votar else "Accede"))
+                    st.metric("Tu estado", estado)
+
+            if not puede_votar:
+                st.info("¿Has probado este producto? Inicia sesión para dejar tu valoración.")
+                if st.button("🔑 Iniciar sesión para valorar", type="primary",
+                             key=f"ficha_login_{cata['id']}", width="stretch"):
+                    st.session_state["pagina"] = "🔐 Acceso"
+                    st.rerun()
+            elif voto_propio is not None:
+                st.success("✅ Tu valoración ya está registrada. Puedes revisarla o editarla abajo.")
+            else:
+                st.caption("Tu experiencia ayuda a que la nota de la comunidad sea más útil.")
+                with st.container(border=True):
+                    st.markdown("#### ✍️ Añade tu valoración")
                     prefijo_pv = f"prem_{cata['id']}_"
                     render_sliders_blocks(prefijo=prefijo_pv)
                     coment = st.text_area("Comentarios (opcional)",

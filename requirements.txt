@@ -1,6 +1,7 @@
 # Sistema de Catas — dependencias
-# Versión mínima: Streamlit 1.37 (st.dialog, mejor soporte móvil)
-streamlit>=1.37
+# Probado con Streamlit 1.61: usa st.fragment, st.pills, st.html y el
+# parámetro width="stretch", ausentes o incompatibles en versiones antiguas.
+streamlit>=1.61,<2.0
 pandas>=2.0
 Pillow>=10.0
 # Conector Postgres para Supabase (modo nube)
@@ -9,3 +10,5 @@ psycopg2-binary>=2.9
 streamlit-cookies-controller>=0.0.4
 # Gráficos con degradado (chart de actividad cósmico en Evolución)
 matplotlib>=3.7
+# Bot de Telegram (consultas y avisos)
+requests>=2.31

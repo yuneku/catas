@@ -16,6 +16,10 @@ backups/
 .env
 .env_db_password
 .env_google_oauth
+telegram_bot.token
+bot_config.json
+bot_snapshot.json
+bot_runtime.json
 *.log
 tunel.log
 
