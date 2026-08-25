@@ -1278,8 +1278,10 @@ def menu_movil(datos: dict):
                 if st.button("✕", key="menu_cerrar", width="stretch"):
                     st.session_state["menu_abierto"] = False
                     st.rerun()
+            invitado_m = not bool(st.session_state.get("usuario", ""))
             for p in paginas_para(datos):
-                if st.button(p, key=f"menu_{p}", width="stretch"):
+                etiqueta = ("🔒 " + p) if (invitado_m and p not in PAGINAS_LECTURA) else p
+                if st.button(etiqueta, key=f"menu_{p}", width="stretch"):
                     st.session_state["pagina"] = p
                     st.session_state["menu_abierto"] = False
                     st.rerun()
@@ -1400,8 +1402,16 @@ def sidebar(datos: dict):
         # Radio SIN key persistente: el valor se controla solo con
         # session_state["pagina"] (el index). Así "Volver como invitado" u
         # otras navegaciones no chocan con un widget que recuerda su valor.
+        # Invitado: las secciones restringidas se marcan con 🔒 (el valor
+        # interno no cambia, solo la etiqueta).
+        logueado_sb = bool(st.session_state.get("usuario", ""))
+
+        def _fmt_seccion(s):
+            return ("🔒 " + s) if (not logueado_sb and s not in PAGINAS_LECTURA) else s
+
         eleccion = st.radio("Sección", paginas, label_visibility="collapsed",
-                            index=paginas.index(pagina_actual))
+                            index=paginas.index(pagina_actual),
+                            format_func=_fmt_seccion)
         st.session_state["pagina"] = eleccion
 
         total = len(datos["catas"])
@@ -1624,20 +1634,12 @@ def pantalla_login(datos: dict):
                "Crea una abajo (solo nombre y contraseña).")
 
     # ---- Login (con autocompletado nativo del navegador) ----
-    # La reclamación de cuenta (perfil sin contraseña) se despliega SOLO si se
-    # activa el toggle: así el campo de confirmación no ocupa espacio en el
-    # flujo normal de acceso.
-    reclamar = st.toggle("🔑 Reclamar cuenta sin contraseña", value=False)
+    # Las cuentas sin contraseña (perfiles antiguos) NO se pueden reclamar en
+    # público: solo el administrador las gestiona desde la sección Perfiles.
     with st.form("login"):
         l_nombre = st.text_input("Nombre de usuario", autocomplete="username")
         l_pw = st.text_input("Contraseña", type="password",
-                             autocomplete="new-password" if reclamar
-                             else "current-password")
-        if reclamar:
-            l_pw_conf = st.text_input("Confirmar contraseña", type="password",
-                                      autocomplete="new-password")
-        else:
-            l_pw_conf = ""
+                             autocomplete="current-password")
         l_recordar = st.checkbox("🔒 Recordarme en este dispositivo", value=True)
         entrar = st.form_submit_button("🔓 Entrar", type="primary",
                                        width="stretch")
@@ -1662,26 +1664,6 @@ def pantalla_login(datos: dict):
             if l_recordar:
                 auth.escribir_cookie(auth.crear_token_sesion(perfil["id"]))
             st.rerun()
-
-        # ---- Rama de reclamación de cuenta (perfil sin password_hash) ----
-        # Solo aplica si el toggle está activo: en el login normal no se puede
-        # reclamar (el campo de confirmación ni siquiera existe).
-        if reclamar and perfil is not None and not perfil.get("password_hash"):
-            if l_pw and l_pw == l_pw_conf:
-                _login_exito(estado)
-                perfil["password_hash"] = auth.hash_password(l_pw)
-                guardar(datos)
-                st.session_state["usuario"] = perfil["nombre"]
-                if l_recordar:
-                    auth.escribir_cookie(auth.crear_token_sesion(perfil["id"]))
-                st.success(f"✅ Contraseña asignada a '{nombre}'. ¡Bienvenido!")
-                st.rerun()
-            elif l_pw:
-                st.error("La confirmación de contraseña no coincide.")
-            else:
-                st.warning(f"'{nombre}' todavía no tiene contraseña: escríbela "
-                           "dos veces para reclamar la cuenta.")
-            return
 
         # Fallo genérico: NO revela si el nombre existe ni qué falló
         _login_fallo(estado, quien)
@@ -1734,10 +1716,9 @@ def pantalla_login(datos: dict):
             auth.escribir_cookie(auth.crear_token_sesion(nuevo_id))
             st.rerun()
 
-    sin_pw = auth.perfiles_sin_password(datos)
-    if sin_pw:
-        st.caption(f"Cuentas sin contraseña (reclámalas desde el login): "
-                   f"{', '.join(sin_pw)}")
+    if auth.perfiles_sin_password(datos):
+        st.caption("💡 ¿Tienes una cuenta antigua sin contraseña? "
+                   "Pídele al administrador que te la asigne (sección Perfiles).")
 
     st.divider()
     if st.button("← Volver como invitado", width="stretch"):
@@ -2272,12 +2253,12 @@ def tarjeta_catalogo(cata: dict, datos: dict, admin: bool):
     if cata.get("anio"):
         chips_row.append(chip(f"📅 {cata['anio']}", core.COLOR_ANIO))
 
-    # Nota profesional (si existe)
+    # Nota profesional (si existe) — ETIQUETADA para no confundir con la general
     prof_html = ""
     nota_prof = core.nota_media_profesional(cata, datos) if datos else None
     if nota_prof is not None:
-        prof_html = (f"<div style='font-size:12px;font-weight:700;color:#e8c35a;"
-                     f"line-height:1.1;margin-top:2px'>⭐ {nota_prof:.1f}</div>")
+        prof_html = (f"<div style='font-size:11px;font-weight:700;color:#e8c35a;"
+                     f"line-height:1.1;margin-top:2px'>⭐ Prof {nota_prof:.1f}</div>")
 
     # HTML en UNA SOLA LÍNEA (evita HTML en crudo)
     html_tarjeta = (
@@ -3619,9 +3600,13 @@ def _tarjeta_perfil(datos: dict, perfil: dict, admin: bool):
                         except Exception:
                             pass
 
-        # Cambiar contraseña: cualquiera la suya; el admin la de cualquiera
+        # Cambiar contraseña: cualquiera la suya; el admin la de cualquiera.
+        # Si el perfil aún no tiene contraseña (cuenta antigua), el admin se la
+        # asigna desde aquí (la reclamación pública ya no existe).
         if es_yo or admin:
-            with st.expander("🔑 Cambiar contraseña"):
+            sin_pw = not perfil.get("password_hash")
+            with st.expander("🔑 Asignar contraseña" if sin_pw
+                             else "🔑 Cambiar contraseña"):
                 n1 = st.text_input("Nueva contraseña (mín. 4)", type="password",
                                    key=f"pw1_{perfil['id']}")
                 n2 = st.text_input("Repite la contraseña", type="password",
@@ -4282,6 +4267,28 @@ def seccion_inicio(datos: dict, logueado: bool):
                          width="stretch"):
                 st.session_state["pagina"] = "🔐 Acceso"
                 st.rerun()
+
+    # ---- CTA de votación: motiva a participar (invitado o logueado) ----
+    perfil_act = perfil_activo(datos)
+    if perfil_act is not None:
+        descartadas = core.ids_descartados_por(datos, perfil_act["id"])
+        sin_votar = [c for c in datos["catas"]
+                     if core.voto_de_perfil(c, perfil_act["id"]) is None
+                     and c.get("id") not in descartadas]
+        if sin_votar:
+            with st.container(border=True):
+                st.markdown(f"🎯 **Tienes {len(sin_votar)} catas por votar** — "
+                            "¿cuál has probado?")
+                if st.button("🗳 Ir a Por votar", key="inicio_porvotar",
+                             type="primary", width="stretch"):
+                    st.session_state["pagina"] = "🎯 Por votar"
+                    st.rerun()
+    else:
+        con_votos = [c for c in datos["catas"] if core.votos_validos(c)]
+        faltan = len(datos["catas"]) - len(con_votos)
+        if faltan > 0:
+            st.caption(f"🎯 {faltan} catas esperando tu voto · "
+                       "crea tu perfil y puntúa")
 
     st.markdown("### 🧭 Explora las secciones")
     st.caption("Toca una tarjeta para ir a esa sección.")
