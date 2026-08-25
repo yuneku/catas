@@ -11,6 +11,9 @@ catas.json
 catas.json.bak
 backups/
 
+# Fotos de indexado local (las de producción viven en Supabase)
+imagenes/
+
 # Config local / secretos
 .streamlit/secrets.toml
 .env

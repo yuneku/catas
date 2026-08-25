@@ -95,3 +95,8 @@ arrancar_web.py(.bat)   Servidor local bindeado a Tailscale
 arrancar_publico.bat    Servidor + túnel Cloudflare + panel
 .streamlit/config.toml  Tema oscuro (portátil)
 ```
+
+## Requisitos de ejecución
+
+La interfaz 1.0 está validada con **Streamlit 1.61**. Instala las dependencias
+con `pip install -r requirements.txt` antes de iniciar la app o desplegarla.
